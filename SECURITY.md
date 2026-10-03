@@ -1,0 +1,63 @@
+# Security Policy
+
+## What this platform is (and is not)
+
+Cloud Vuln Scan is a **defensive, read-only** cloud security assessment tool.
+
+It **never**:
+
+- modifies, deletes or creates resources in a client environment;
+- changes security configuration (no automatic remediation);
+- deploys or installs anything into a client environment;
+- exploits vulnerabilities or performs destructive or intrusive testing;
+- reads business data (for example storage object contents or secret values).
+
+Read-only behaviour is enforced in two independent layers (see
+[ADR 0002](docs/decisions/0002-read-only-security-boundary.md)):
+
+1. **Client-side permissions:** clients grant only read-only roles.
+2. **Application-side guard:** the platform allows only an explicit list of read
+   operations and blocks every other cloud API call before it is sent, even if the
+   granted credentials would allow more.
+
+A contribution that weakens either layer will not be accepted.
+
+## Reporting a vulnerability
+
+The repository is currently **private**. Report suspected vulnerabilities directly
+to the maintainers rather than in an issue or pull request. When the project
+becomes public, this section will name a private reporting channel (GitHub private
+vulnerability reporting).
+
+Please include the affected component, steps to reproduce, and the impact. Do not
+include real client data or credentials in a report.
+
+## Supported versions
+
+The project is pre-release. Only the latest commit on the default branch is supported.
+
+## Security practices in this repository
+
+| Practice | How |
+|---|---|
+| No secrets in git | `.env` is git-ignored; `.env.example` holds placeholders only; Gitleaks scans the full history in CI and via `dev.ps1 secrets` |
+| Secrets never logged | Structured JSON logging with automatic redaction of credential-like values; `SecretStr` for passwords; config errors never echo values |
+| Safe production config | The app refuses to start in production with placeholder or short passwords, or DEBUG logging |
+| Minimal exposure | Database not published outside Docker; API bound to `127.0.0.1` in development; API docs disabled in production; no `Server` header |
+| Least privilege | Containers run as a non-root user; CI token is read-only |
+| Supply chain | Exact dependency versions and hashes pinned in `uv.lock`; installs fail if the lockfile is out of date |
+| Health endpoints | Unauthenticated, so they return fixed statuses only, never error details or versions |
+
+## If a secret is committed
+
+Treat it as compromised even if the commit is removed: **rotate it first**, then
+remove it from history. Deleting the file is not enough; it remains in git history.
+
+## Planned controls (later milestones)
+
+Argon2id password hashing; mandatory TOTP MFA for all users; server-side sessions;
+CSRF protection; login rate limiting; role-based and assigned-client authorization
+enforced on every endpoint; append-only audit logging; temporary cloud credentials
+only (AWS `AssumeRole` with ExternalId, Azure multi-tenant app with no stored client
+secrets). See [ADR 0009](docs/decisions/0009-authentication-and-authorization.md)
+and [ADR 0005](docs/decisions/0005-cloud-access-model.md).

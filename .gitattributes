@@ -1,0 +1,15 @@
+# Normalise line endings. Files used inside Linux containers MUST use LF:
+# a Windows CRLF line ending breaks shell scripts and Dockerfiles in confusing ways.
+* text=auto eol=lf
+
+# Windows-only scripts keep Windows line endings.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: never touch.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.woff2 binary

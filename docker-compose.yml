@@ -1,0 +1,59 @@
+# Local development environment: PostgreSQL + the API.
+# Use scripts/dev.ps1 rather than calling docker compose directly.
+#
+# Values like ${POSTGRES_USER} are read from the .env file next to this file.
+
+name: cloud-vuln-scan
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Named volume: data survives `down`/`up`. Removed only by `dev.ps1 reset`.
+      - pgdata:/var/lib/postgresql/data
+    # No `ports:` section on purpose. The database is reachable only by other
+    # containers on this project's private network, not from your machine or LAN.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    env_file: .env
+    environment:
+      # Inside the compose network, the database is reached by its service name.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      # Windows bind mounts do not deliver file-change events to Linux
+      # containers, so the auto-reloader polls for changes instead.
+      WATCHFILES_FORCE_POLLING: "true"
+      # Tool caches go to /tmp: the container user cannot write elsewhere.
+      RUFF_CACHE_DIR: /tmp/ruff-cache
+      UV_CACHE_DIR: /tmp/uv-cache
+    volumes:
+      # Mount the source code so edits on your machine apply without rebuilding.
+      - ./backend:/app
+    ports:
+      # 127.0.0.1 = only reachable from this computer, not from your network.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Liveness only: the API is "up" even if the database is briefly down.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  pgdata:

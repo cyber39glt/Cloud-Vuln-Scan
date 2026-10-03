@@ -1,0 +1,50 @@
+[project]
+name = "cloud-vuln-scan"
+version = "0.1.0"
+description = "Read-only cloud security assessment platform for AWS and Azure"
+readme = "../README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.142,<1.0",
+    "uvicorn[standard]>=0.54,<1.0",
+    "pydantic-settings>=2.15,<3.0",
+    "sqlalchemy>=2.1,<2.2",
+    "psycopg[binary]>=3.3,<3.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1,<10",
+    "httpx2>=2.13,<3",
+    "ruff>=0.16,<0.17",
+]
+
+# ---------------------------------------------------------------- Ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes (unused imports, undefined names)
+    "I",   # import sorting
+    "B",   # bugbear (likely bugs)
+    "UP",  # modern Python syntax
+    "S",   # bandit (security issues)
+    "SIM", # simplifications
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use plain `assert` and fixed fake credentials on purpose.
+"tests/**" = ["S101", "S105", "S106"]
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# No cache directory: the source folder is mounted read-mostly into the container.
+addopts = "-ra --strict-markers -p no:cacheprovider"
+markers = [
+    "integration: needs a real PostgreSQL database (run via the dev script or CI)",
+]

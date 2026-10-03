@@ -1,0 +1,79 @@
+import pytest
+from pydantic import ValidationError
+
+from app.core.config import Settings
+
+
+def make_settings(**overrides) -> Settings:
+    # _env_file=None: ignore any local .env so tests are deterministic.
+    return Settings(_env_file=None, **overrides)
+
+
+def test_defaults_to_development():
+    settings = make_settings()
+
+    assert settings.app_env == "development"
+    assert not settings.is_production
+
+
+def test_password_is_hidden_in_repr():
+    settings = make_settings(postgres_password="super-secret-value")
+
+    assert "super-secret-value" not in repr(settings)
+    assert "super-secret-value" not in str(settings.postgres_password)
+
+
+def test_database_url_escapes_special_characters():
+    settings = make_settings(postgres_host="db", postgres_password="p@ss:w/rd#1")
+
+    url = settings.database_url
+
+    assert url.host == "db"
+    assert url.password == "p@ss:w/rd#1"
+    # The string form hides the password by default.
+    assert "p@ss" not in str(url)
+
+
+@pytest.mark.parametrize("password", ["change-me-local-only-1234567890", "short", ""])
+def test_production_rejects_weak_or_placeholder_password(password):
+    with pytest.raises(ValidationError, match="POSTGRES_PASSWORD"):
+        make_settings(app_env="production", postgres_password=password)
+
+
+def test_validation_errors_do_not_echo_the_password():
+    with pytest.raises(ValidationError) as error:
+        make_settings(app_env="production", postgres_password="weak-real-pw")
+
+    assert "weak-real-pw" not in str(error.value)
+
+
+def test_production_rejects_debug_logging():
+    with pytest.raises(ValidationError, match="DEBUG"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            log_level="DEBUG",
+        )
+
+
+def test_production_accepts_strong_configuration():
+    settings = make_settings(
+        app_env="production", postgres_password="a-long-random-production-secret"
+    )
+
+    assert settings.is_production
+
+
+def test_rejects_unknown_environment():
+    with pytest.raises(ValidationError):
+        make_settings(app_env="staging-typo")
+
+
+def test_reads_values_from_environment(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("POSTGRES_PORT", "6543")
+
+    settings = make_settings()
+
+    assert settings.app_env == "test"
+    assert settings.postgres_port == 6543
