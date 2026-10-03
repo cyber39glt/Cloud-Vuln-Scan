@@ -1,0 +1,78 @@
+# Continuous Integration: runs on every push and pull request.
+# It uses the same Docker setup as local development, so "passes on my machine"
+# and "passes in CI" mean the same thing.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Least privilege for the workflow token: read the code, nothing else.
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the older, now-irrelevant run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env from the example
+        run: cp .env.example .env
+
+      - name: Build images and start PostgreSQL + API
+        run: docker compose up --build --detach --wait
+
+      - name: Ruff lint
+        run: docker compose run --rm --no-deps api ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: docker compose run --rm --no-deps api ruff format --check .
+
+      - name: Tests (including database integration)
+        run: docker compose run --rm api pytest
+
+      - name: Smoke test the running API
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:8000/health
+          curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down --volumes
+
+  production-image:
+    name: Build production image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the prod target
+        run: docker build --target prod --tag cloud-vuln-scan-api:ci ./backend
+      - name: Production image must run as a non-root user
+        run: test "$(docker run --rm --entrypoint id cloud-vuln-scan-api:ci -un)" = "app"
+
+  secret-scan:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history: a secret deleted later is still leaked
+      - name: Gitleaks
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo"
+          zricethezav/gitleaks:v8.30.1
+          git /repo --redact --no-banner --verbose
