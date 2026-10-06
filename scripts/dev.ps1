@@ -14,7 +14,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
-                 "secrets", "check", "build", "reset")]
+                 "secrets", "check", "build", "reset", "demo")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -75,6 +75,7 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   secrets   Scan the git history for committed secrets with Gitleaks
   check     lint + test + secrets (what CI runs)
   build     Build the production image ($ProdImage)
+  demo      Run the rule engine on sample data (add -json for the full dataset)
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
@@ -125,6 +126,11 @@ try {
             Invoke-Compose @("run", "--rm", "--no-deps", "api", "ruff", "format", ".")
         }
         "secrets" { Invoke-SecretScan }
+        "demo" {
+            Write-Step "Rule engine demo on sample AWS + Azure data (no cloud access)"
+            $demoArgs = @($ExtraArgs | ForEach-Object { if ($_ -eq "-json") { "--json" } else { $_ } })
+            Invoke-Compose (@("run", "--rm", "--no-deps", "api", "python", "-m", "app.demo") + $demoArgs)
+        }
         "check" {
             Invoke-Lint
             Invoke-Tests
