@@ -28,7 +28,7 @@ name = "AICPA Trust Services Criteria (SOC 2)"
 version = "2017 (revised points of focus 2022)"
 providers = ["aws", "azure"]
 
-# ------------------------------------------------------------------ NET-001
+# ------------------------------------------------------------------ NET-001 (SSH)
 [[mapping]]
 rule = "NET-001"
 framework = "cis_aws"
@@ -41,13 +41,6 @@ rule = "NET-001"
 framework = "cis_aws"
 control = "5.3"
 title = "Security groups do not allow internet ingress to remote administration ports (IPv6)"
-verified = false
-
-[[mapping]]
-rule = "NET-001"
-framework = "cis_azure"
-control = "6.1"
-title = "RDP access from the internet is evaluated and restricted"
 verified = false
 
 [[mapping]]
@@ -66,6 +59,42 @@ verified = true
 
 [[mapping]]
 rule = "NET-001"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+# ------------------------------------------------------------------ NET-002 (RDP)
+[[mapping]]
+rule = "NET-002"
+framework = "cis_aws"
+control = "5.2"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv4)"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "cis_aws"
+control = "5.3"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv6)"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "cis_azure"
+control = "6.1"
+title = "RDP access from the internet is evaluated and restricted"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = true
+
+[[mapping]]
+rule = "NET-002"
 framework = "soc2"
 control = "CC6.6"
 title = "Logical access security measures against threats from outside system boundaries"

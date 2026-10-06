@@ -39,7 +39,7 @@ AssessmentResult (results + findings + summary): the single dataset for all outp
 
 ## Steps to add a rule
 
-1. **Choose an ID**: `NET-002` for a cross-cloud rule, `AWS-IAM-001` / `AZ-NET-001` for
+1. **Choose an ID**: `NET-003` for a cross-cloud rule, `AWS-IAM-001` / `AZ-NET-001` for
    provider-specific rules. Never reuse or renumber an ID.
 2. **Pick the scope**:
    - `resource`: judge each resource separately (most rules).
@@ -87,5 +87,8 @@ class MyRule(Rule):
   the point. Evidence is redacted automatically, but do not rely on that.
 - **Unknown is not good.** If a value is missing and the provider documents a risky
   default, treat it as risky and say so (see `AZ-STO-001`).
+- **Share logic, not rules.** Similar rules (e.g. `NET-001` SSH and `NET-002` RDP) share
+  a helper module whose name starts with `_`, but each stays a separate rule with its
+  own ID and framework mappings, so findings map precisely.
 - **Say what you cannot see** in `limitations`; it appears in reports.
 - **Change logic → bump `version`** in the metadata.
