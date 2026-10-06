@@ -51,7 +51,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
 | `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | Planned |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
-| `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (3 rules) |
+| `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `reporting` | One dataset → JSON, CSV, PDF | Planned |
 
@@ -93,7 +93,7 @@ The same container image runs everywhere; only environment variables differ
 
 - Provider-neutral models for inventory, check results, evidence and findings
 - Rule engine with honest handling of missing data (`ERROR` = not evaluated)
-- Three rules: `NET-001` (SSH/RDP open to the internet, AWS + Azure),
+- Four rules: `NET-001` / `NET-002` (SSH / RDP open to the internet, AWS + Azure),
   `AWS-LOG-001` (no multi-region CloudTrail), `AZ-STO-001` (anonymous blob access)
 - Framework mappings in `app/frameworks/mappings.toml`
 - `python -m app.demo` / `dev.ps1 demo`: runs the engine on sample data

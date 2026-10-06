@@ -35,13 +35,16 @@ def test_failures_become_findings_with_explanation_and_frameworks():
 def test_azure_findings_get_azure_cis_references():
     result = RuleEngine().run(inventory(Provider.AZURE, nsg("n", ingress(port=3389))))
     [finding] = result.findings
+    assert finding.rule_id == "NET-002"
+    cis = [ref.control_id for ref in finding.framework_refs if ref.framework == Framework.CIS_AZURE]
+    assert cis == ["6.1"]  # the RDP control only, not the SSH one
     assert Framework.CIS_AZURE in {ref.framework for ref in finding.framework_refs}
     assert Framework.CIS_AWS not in {ref.framework for ref in finding.framework_refs}
 
 
 def test_only_rules_for_the_inventory_provider_run():
     result = RuleEngine().run(inventory(Provider.AZURE, storage_account("s", False)))
-    assert {r.rule_id for r in result.rules_run} == {"NET-001", "AZ-STO-001"}
+    assert {r.rule_id for r in result.rules_run} == {"NET-001", "NET-002", "AZ-STO-001"}
 
 
 def test_account_rule_with_collection_gap_is_not_evaluated_not_failed():
@@ -148,7 +151,7 @@ def test_summary_counts():
     counts = result.status_counts()
     assert counts[CheckStatus.FAIL] == 1
     assert counts[CheckStatus.PASS] == 1
-    assert counts[CheckStatus.NOT_APPLICABLE] == 1  # no NSGs in this inventory
+    assert counts[CheckStatus.NOT_APPLICABLE] == 2  # no NSGs: NET-001 and NET-002
 
 
 def test_result_is_json_serializable():
