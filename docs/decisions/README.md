@@ -18,5 +18,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0010](0010-hosting-agnostic-containers.md) | Hosting-agnostic containers, environment-based configuration | Accepted |
 | [0011](0011-windows-first-docker-development.md) | Windows-first, Docker-based developer experience | Accepted |
 | [0012](0012-private-now-open-source-later.md) | Private repository now, open source later | Accepted |
+| [0013](0013-finding-granularity-and-collection-gaps.md) | Finding granularity, collection gaps, rule purity | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

@@ -50,10 +50,9 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `api` | HTTP routes | Health only (**M0 ✓**) |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
 | `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | Planned |
-| `inventory` | Normalized resource model (common envelope + typed facets) | Planned |
-| `rules` | Rule definitions and engine. **Never calls cloud APIs.** | Planned |
-| `findings` | Findings, evidence, severity, review layer | Planned |
-| `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | Planned |
+| `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
+| `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (3 rules) |
+| `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `reporting` | One dataset → JSON, CSV, PDF | Planned |
 
 ## Assessment data flow
@@ -88,7 +87,18 @@ The same container image runs everywhere; only environment variables differ
 | Image target | `dev` (tools + auto-reload) | `dev` + `prod` build | `prod` |
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
-## What M0 contains
+## What exists today
+
+### M1: domain model and rule engine
+
+- Provider-neutral models for inventory, check results, evidence and findings
+- Rule engine with honest handling of missing data (`ERROR` = not evaluated)
+- Three rules: `NET-001` (SSH/RDP open to the internet, AWS + Azure),
+  `AWS-LOG-001` (no multi-region CloudTrail), `AZ-STO-001` (anonymous blob access)
+- Framework mappings in `app/frameworks/mappings.toml`
+- `python -m app.demo` / `dev.ps1 demo`: runs the engine on sample data
+
+### M0: foundation
 
 - FastAPI application with `/health` (liveness) and `/health/ready` (database check)
 - Environment-based configuration with production safety checks
@@ -101,7 +111,7 @@ The same container image runs everywhere; only environment variables differ
 | # | Milestone |
 |---|---|
 | **M0** | **Project foundation** ✓ |
-| M1 | Domain model + rule engine on fixture data (no cloud) |
+| **M1** | **Domain model + rule engine on fixture data (no cloud)** ✓ |
 | M2 | AWS connector: AssumeRole + ExternalId, validation, read-only guard |
 | M3 | AWS collectors + AWS rules; misconfigured test environment in our own sandbox |
 | M4 | Persistence: schema, migrations, stored scan runs |

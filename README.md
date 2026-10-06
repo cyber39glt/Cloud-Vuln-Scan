@@ -6,8 +6,9 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M0, project foundation).**
-> There are no cloud connectors, security rules, user accounts or dashboard yet.
+> **Status: early development (milestone M1, rule engine).**
+> The rule engine runs on sample data. There are no cloud connectors, user accounts
+> or dashboard yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -85,6 +86,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `secrets` | Scan git history for committed secrets (Gitleaks) |
 | `check` | `lint` + `test` + `secrets`: the same checks CI runs |
 | `build` | Build the production image `cloud-vuln-scan-api:local` |
+| `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset) |
 | `reset` | Stop everything **and delete the local database** (asks first) |
 
 Code changes in `backend/` are picked up automatically while the app is running.
@@ -128,7 +130,10 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   ├── app/
 │   │   ├── main.py          Application entry point
 │   │   ├── api/             HTTP routes (health checks so far)
-│   │   └── core/            Configuration, logging, database
+│   │   ├── core/            Configuration, logging, database
+│   │   ├── domain/          Inventory, findings and evidence models
+│   │   ├── rules/           Security rules and the rule engine
+│   │   └── frameworks/      CIS / NIST CSF / SOC 2 mappings
 │   ├── tests/               pytest tests
 │   ├── Dockerfile           dev and prod container images
 │   ├── pyproject.toml       Dependencies and tool settings
@@ -146,6 +151,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 
 - [Architecture overview](docs/architecture.md)
 - [Architecture decisions](docs/decisions/)
+- [Writing a security rule](docs/rules.md)
 - [Security policy](SECURITY.md)
 
 ## License
