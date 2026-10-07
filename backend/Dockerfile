@@ -1,6 +1,16 @@
 # One Dockerfile, two targets:
 #   dev   - includes test/lint tools, runs with auto-reload (used by docker-compose.yml)
-#   prod  - runtime dependencies only, no source mount (used by `dev.ps1 build`)
+#   prod  - runtime dependencies only, no source mount, and the built dashboard
+#           (used by `dev.ps1 build`). Needs the frontend folder as an extra build
+#           context:  docker build --target prod --build-context frontend=./frontend ./backend
+
+# ------------------------------------------------------------------ dashboard build
+FROM node:24-alpine AS web
+WORKDIR /web
+COPY --from=frontend package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY --from=frontend . .
+RUN npm run build
 
 # ------------------------------------------------------------------ base
 FROM python:3.12-slim AS base
@@ -40,6 +50,8 @@ RUN uv sync --frozen --no-dev --no-install-project && pip uninstall -y uv
 COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations
+# The dashboard, served by the API at / (settings.web_dist_dir).
+COPY --from=web /web/dist ./web
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

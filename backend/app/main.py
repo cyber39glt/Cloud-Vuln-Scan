@@ -4,14 +4,16 @@ Uvicorn (the web server) imports `app` from this module and serves it.
 """
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import admin, assessments, auth, clients, health
+from app.api import admin, assessments, auth, clients, health, overview
 from app.api.security import SecurityMiddleware, install_error_handlers
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.web import mount_dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +44,14 @@ def create_app() -> FastAPI:
     application.include_router(admin.router)
     application.include_router(clients.router)
     application.include_router(assessments.router)
+    application.include_router(overview.router)
+    # Last: the dashboard's catch-all route must not shadow any API route.
+    dashboard = mount_dashboard(application, Path(settings.web_dist_dir))
 
-    logger.info("application configured", extra={"environment": settings.app_env})
+    logger.info(
+        "application configured",
+        extra={"environment": settings.app_env, "dashboard": dashboard},
+    )
     return application
 
 

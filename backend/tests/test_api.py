@@ -218,3 +218,21 @@ def test_data_api_requires_login(http):
         assert http.get(url).status_code == 401, url
     assert http.post("/api/v1/clients", json={"name": "x"}).status_code == 401
     assert http.get("/health").status_code == 200  # health stays available
+
+
+def test_onboarding_instructions(api):
+    client_id = _client(api)
+    aws = api.post(
+        f"/api/v1/clients/{client_id}/connections/aws", json={"account_id": "111122223333"}
+    ).json()["connection"]
+    steps = api.get(f"/api/v1/clients/{client_id}/connections/{aws['id']}/onboarding").json()
+    assert steps["external_id"] == aws["external_id"] and steps["provider"] == "aws"
+
+    azure = api.post(
+        f"/api/v1/clients/{client_id}/connections/azure",
+        json={"tenant_id": TENANT, "subscription_id": SUB},
+    ).json()
+    steps = api.get(f"/api/v1/clients/{client_id}/connections/{azure['id']}/onboarding").json()
+    assert all(f"/subscriptions/{SUB}" in c for c in steps["role_commands"])
+    other = _client(api, "Globex")
+    assert api.get(f"/api/v1/clients/{other}/connections/{aws['id']}/onboarding").status_code == 404

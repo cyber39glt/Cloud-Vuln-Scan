@@ -84,6 +84,20 @@ class AwsSetup(BaseModel):
     template: str = "infra/aws/client-onboarding-role.yaml"
 
 
+class Onboarding(BaseModel):
+    """What the client's administrator does once to grant read-only access."""
+
+    provider: Provider
+    # AWS
+    role_name: str | None = None
+    external_id: str | None = None
+    template: str | None = None
+    # Azure
+    admin_consent_url: str | None = None
+    role_commands: list[str] = []
+    guide: str
+
+
 class AwsConnectionOut(BaseModel):
     connection: ConnectionOut
     setup: AwsSetup

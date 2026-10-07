@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     max_failed_logins: int = Field(default=5, ge=3, le=20)
     lockout_minutes: int = Field(default=15, ge=1, le=1440)
 
+    # The built dashboard (frontend/dist, copied here in the production image). When
+    # missing (development), only the API is served; use the Vite dev server instead.
+    web_dist_dir: str = "/app/web"
+
     # Host names the API answers to. Anything else is rejected, which stops "DNS
     # rebinding" (a web page tricking your browser into calling the local API).
     api_allowed_hosts: list[str] = ["localhost", "127.0.0.1"]

@@ -1,5 +1,6 @@
 """Clients and their cloud connections."""
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,9 +14,12 @@ from app.api.schemas import (
     ClientCreate,
     ClientOut,
     ConnectionOut,
+    Onboarding,
 )
 from app.auth import audit, service
 from app.core.config import get_settings
+from app.domain.enums import Provider
+from app.providers.azure.session import admin_consent_url
 from app.storage import repository as repo
 
 router = APIRouter(prefix="/api/v1/clients", tags=["clients"])
@@ -50,6 +54,33 @@ def get_client(client: ClientScope) -> ClientOut:
 @router.get("/{client_id}/connections")
 def list_connections(client: ClientScope, db: DbSession) -> list[ConnectionOut]:
     return [ConnectionOut.model_validate(c) for c in repo.list_connections(db, client.id)]
+
+
+@router.get("/{client_id}/connections/{connection_id}/onboarding")
+def onboarding(connection_id: uuid.UUID, client: ClientScope, db: DbSession) -> Onboarding:
+    """The one-time steps the client performs. Nothing is contacted in the cloud."""
+    settings = get_settings()
+    connection = repo.get_connection_by_id(db, client.id, connection_id)
+    if connection.provider == Provider.AWS:
+        return Onboarding(
+            provider=Provider.AWS,
+            role_name=settings.aws_assessment_role_name,
+            external_id=connection.external_id,
+            template="infra/aws/client-onboarding-role.yaml",
+            guide="docs/aws-connection.md",
+        )
+    app_id = settings.azure_client_id or None
+    scope = f"/subscriptions/{connection.account_id}"
+    return Onboarding(
+        provider=Provider.AZURE,
+        admin_consent_url=admin_consent_url(connection.tenant_id or "", app_id) if app_id else None,
+        role_commands=[
+            f"az role assignment create --assignee {app_id or '<platform app ID>'} "
+            f'--role "{role}" --scope {scope}'
+            for role in ("Reader", "Security Reader")
+        ],
+        guide="docs/azure-connection.md",
+    )
 
 
 @router.post("/{client_id}/connections/aws", status_code=status.HTTP_201_CREATED)
