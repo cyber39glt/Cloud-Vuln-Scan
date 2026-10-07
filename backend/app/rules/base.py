@@ -67,6 +67,16 @@ class Rule(ABC):
     # `subject` is a Resource for resource-level results, or the Inventory for
     # account-level results.
 
+    @staticmethod
+    def evidence(resource: Resource, summary: str, observed: dict) -> Evidence:
+        """Evidence that cites the API data a resource was built from."""
+        return Evidence(
+            source_operation=resource.source_operation,
+            collected_at=resource.collected_at,
+            summary=summary,
+            observed=observed,
+        )
+
     def passed(self, subject: Resource | Inventory, message: str) -> CheckResult:
         return self._result(CheckStatus.PASS, subject, message, ())
 

@@ -142,12 +142,16 @@ Connection is ready.
 | Data | API (GET, subscription-wide) | Kept |
 |---|---|---|
 | Network security groups | `Microsoft.Network/networkSecurityGroups` | ID, name, location, resource group, tags, **inbound custom rules** (protocol, ports, source, allow/deny, priority, name) |
-| Storage accounts | `Microsoft.Storage/storageAccounts` | ID, name, location, resource group, tags, `allowBlobPublicAccess` |
+| Storage accounts | `Microsoft.Storage/storageAccounts` | ID, name, location, resource group, tags, `allowBlobPublicAccess`, `supportsHttpsTrafficOnly`, `minimumTlsVersion` |
+| SQL servers | `Microsoft.Sql/servers`, `{server}/firewallRules` | ID, name, location, tags, public network access, firewall rule names and IP ranges |
+| Activity Log export | `Microsoft.Insights/diagnosticSettings` (subscription) | per setting: name, has a destination yes/no, enabled categories (no destination IDs) |
+| Defender for Cloud | `Microsoft.Security/pricings` | plan name and tier (Free/Standard) |
 
-Nothing else: no outbound rules, no keys, no blob contents.
+Nothing else: no outbound rules, no keys, no blob or database contents.
 
 - **Scope:** Azure lists resources across the whole subscription. `--regions uksouth,ukwest`
   keeps only resources in those locations; others are discarded, not stored.
+  Subscription-wide settings (Activity Log export, Defender plans) are always kept.
 - **Gaps:** if a list call is denied, that resource type is "not evaluated" and other
   types are still assessed.
 - **Safety order:** the scan confirms the subscription belongs to the expected tenant and

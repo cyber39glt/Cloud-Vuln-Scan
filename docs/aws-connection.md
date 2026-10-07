@@ -159,8 +159,20 @@ Try a wrong ExternalId: "Assume assessment role" fails with a plain-language hin
 | Enabled regions | `ec2:DescribeRegions` | region names |
 | Security groups (each region in scope) | `ec2:DescribeSecurityGroups` | ID, name, VPC, tags, inbound rules (protocol, ports, source, description) |
 | CloudTrail trails | `cloudtrail:DescribeTrails`, `cloudtrail:GetTrailStatus` | name, home region, multi-region, logging, organization trail, log validation |
+| Root user | `iam:GetAccountSummary` | root MFA on/off, root access keys present yes/no |
+| Password policy | `iam:GetAccountPasswordPolicy` | exists, minimum length, complexity and reuse settings |
+| IAM users | `iam:GenerateCredentialReport`, `iam:GetCredentialReport` | per user: password enabled, MFA active; per active key: last rotated, last used (no key IDs) |
+| AdministratorAccess | `iam:ListEntitiesForPolicy` | names of users, groups and roles it is attached to |
+| S3 account settings | `s3:GetAccountPublicAccessBlock` | the four Block Public Access flags |
+| S3 buckets | `s3:ListAllMyBuckets`, `s3:GetBucketLocation`, `s3:GetBucketPolicyStatus`, `s3:GetBucketAcl`, `s3:GetBucketPublicAccessBlock` | name, region, policy public yes/no (AWS's own analysis), ACL public yes/no, Block Public Access flags |
+| RDS instances (each region in scope) | `rds:DescribeDBInstances` | identifier, engine, publicly accessible |
 
-Nothing else is collected: no egress rules, instance data, object contents or secrets.
+Nothing else is collected: no egress rules, instance data, bucket policies or objects,
+database contents or secrets.
+
+`iam:GenerateCredentialReport` is the one call whose name is not Describe/List/Get. It
+asks IAM to rebuild its credential report and changes no configuration; see
+[ADR 0018](decisions/0018-rule-expansion-r1.md).
 
 **Scope.** By default every region enabled in the account is assessed. Use `--regions`
 to match the scope agreed with the client. A requested region that is not enabled is

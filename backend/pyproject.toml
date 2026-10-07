@@ -42,8 +42,9 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests use plain `assert` and fixed fake credentials on purpose.
-"tests/**" = ["S101", "S105", "S106"]
+# Tests use plain `assert`, fixed fake credentials and "any address" IP literals
+# (0.0.0.0 as firewall data, not a socket binding) on purpose.
+"tests/**" = ["S101", "S104", "S105", "S106"]
 
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]

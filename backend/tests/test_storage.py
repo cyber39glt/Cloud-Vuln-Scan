@@ -412,6 +412,6 @@ def test_cli_azure_scan_is_saved_and_exportable(cli_db, capsys, tmp_path, monkey
     scan_id = out.split(" as scan ")[1].split(".")[0]
 
     assert cli.main(["assessments", "list", "--client", "Acme Ltd"]) == 0
-    assert f"azure {AZ_SUB}  3 findings" in capsys.readouterr().out
+    assert f"azure {AZ_SUB}  5 findings" in capsys.readouterr().out
     assert cli.main(["assessments", "export", "--client", "Acme Ltd", "--scan", scan_id]) == 0
     assert len(list((tmp_path / "exports").iterdir())) == 2

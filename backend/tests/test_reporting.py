@@ -47,11 +47,19 @@ def _csv_rows(data: bytes) -> list[dict[str, str]]:
 
 def test_report_summary_matches_findings(report):
     assert report.schema_version == REPORT_SCHEMA_VERSION
-    assert report.summary.total_findings == len(report.findings) == 3
-    assert report.summary.by_severity[Severity.HIGH] == 3
-    assert sum(report.summary.by_category.values()) == 3
+    assert report.summary.total_findings == len(report.findings) == 10
+    assert report.summary.by_severity[Severity.HIGH] == 6
+    assert report.summary.by_severity[Severity.MEDIUM] == 4
+    assert sum(report.summary.by_category.values()) == 10
     assert {(g.rule_id, g.affected_resources) for g in report.summary.by_rule} == {
+        ("AWS-EXP-001", 1),
+        ("AWS-IAM-003", 1),
+        ("AWS-IAM-004", 1),
+        ("AWS-IAM-005", 1),
+        ("AWS-IAM-006", 1),
         ("AWS-LOG-001", 1),
+        ("AWS-STO-001", 1),
+        ("AWS-STO-002", 1),
         ("NET-001", 1),
         ("NET-002", 1),
     }
@@ -86,7 +94,7 @@ def test_json_round_trips_exactly(report):
 def test_json_uses_plain_values(report):
     data = json.loads(to_json(report))
     assert data["provider"] == "aws"
-    assert data["summary"]["by_severity"]["high"] == 3
+    assert data["summary"]["by_severity"]["high"] == 6
     assert data["source"]["client_name"] == "Acme Ltd"
 
 

@@ -26,7 +26,14 @@ from app.providers.azure.guard import (
 from app.providers.azure.session import AzureConnection, admin_consent_url, platform_credential
 from app.providers.azure.validation import PERMISSION_PROBES, validate_connection
 from app.rules.registry import ALL_RULES
-from tests.azure_fakes import SUB, TENANT, FakeCredential, arm_url, mock_subscription
+from tests.azure_fakes import (
+    SUB,
+    TENANT,
+    FakeCredential,
+    arm_url,
+    mock_arm_lists,
+    mock_subscription,
+)
 
 CONNECTION = AzureConnection(TENANT, SUB)
 _url = arm_url
@@ -48,6 +55,7 @@ def _lists(rsps, nsg_status: int = 200) -> None:
         _url(f"/subscriptions/{SUB}/providers/Microsoft.Storage/storageAccounts"),
         json={"value": []},
     )
+    mock_arm_lists(rsps)
 
 
 # ------------------------------------------------------------------ guard
@@ -221,6 +229,10 @@ def test_validation_happy_path(settings):
     assert statuses["Expected subscription"] == "ok"
     assert statuses["Permission Microsoft.Network/networkSecurityGroups/read"] == "ok"
     assert statuses["Permission Microsoft.Storage/storageAccounts/read"] == "ok"
+    assert statuses["Permission Microsoft.Sql/servers/read"] == "ok"
+    assert statuses["Permission Microsoft.Insights/diagnosticSettings/read"] == "ok"
+    assert statuses["Permission Microsoft.Security/pricings/read"] == "ok"
+    assert statuses["Permission Microsoft.Sql/servers/firewallRules/read"] == "skipped"
     assert statuses["Read-only guard"] == "ok"
 
 

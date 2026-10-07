@@ -28,6 +28,33 @@ AssessmentResult (results + findings + summary): the single dataset for all outp
 | `app/rules/registry.py` | The list of enabled rules |
 | `app/frameworks/mappings.toml` | Rule → CIS / NIST CSF 2.0 / SOC 2 references |
 
+## Enabled rules
+
+| ID | Provider | Severity | Scope | Checks |
+|---|---|---|---|---|
+| `NET-001` | AWS, Azure | High | resource | SSH (22) open to the internet |
+| `NET-002` | AWS, Azure | High | resource | RDP (3389) open to the internet |
+| `AWS-IAM-001` | AWS | Critical | account | Root user without MFA |
+| `AWS-IAM-002` | AWS | Critical | account | Root user has access keys |
+| `AWS-IAM-003` | AWS | High | resource | IAM user with console password but no MFA |
+| `AWS-IAM-004` | AWS | Medium | resource | Active access keys unused for 45+ days |
+| `AWS-IAM-005` | AWS | Medium | account | No password policy, or minimum length below 14 |
+| `AWS-IAM-006` | AWS | Medium | account | AdministratorAccess attached to users or groups |
+| `AWS-STO-001` | AWS | Medium | account | Account-level S3 Block Public Access not fully on |
+| `AWS-STO-002` | AWS | High | resource | S3 bucket public via policy or ACL, not neutralized by Block Public Access |
+| `AWS-EXP-001` | AWS | High | resource | RDS instance publicly accessible |
+| `AWS-LOG-001` | AWS | High | account | No multi-region CloudTrail trail logging |
+| `AZ-STO-001` | Azure | Medium | resource | Storage account allows anonymous blob access |
+| `AZ-STO-002` | Azure | Medium | resource | Storage account accepts HTTP (secure transfer off) |
+| `AZ-STO-003` | Azure | Medium | resource | Storage account minimum TLS below 1.2 |
+| `AZ-EXP-001` | Azure | High | resource | SQL server firewall allows 0.0.0.0–255.255.255.255 |
+| `AZ-EXP-002` | Azure | Medium | resource | SQL server allows all Azure services (0.0.0.0–0.0.0.0) |
+| `AZ-LOG-001` | Azure | Medium | account | Activity Log (Administrative + Security) not exported |
+| `AZ-SEC-001` | Azure | Medium | account | Defender plans for servers, SQL, storage or Key Vault not on Standard |
+
+Each rule's description, risk, recommendation and limitations are in its source file and
+appear in reports. Framework references are in `app/frameworks/mappings.toml`.
+
 ## The four outcomes
 
 | Status | Meaning | Becomes a finding? |

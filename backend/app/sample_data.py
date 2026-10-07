@@ -29,6 +29,106 @@ def _sg(name: str, group_id: str, region: str, rules: list[NetworkIngressRule]) 
     )
 
 
+def _aws(
+    resource_type: str,
+    resource_id: str,
+    name: str,
+    properties: dict,
+    operation: str,
+    region: str = "global",
+) -> Resource:
+    return Resource(
+        provider=Provider.AWS,
+        account_id=AWS_ACCOUNT,
+        region=region,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        name=name,
+        properties=properties,
+        source_operation=operation,
+        collected_at=COLLECTED_AT,
+    )
+
+
+def _aws_account_resources() -> list[Resource]:
+    """IAM, S3 and RDS: a typical small account with a few common weaknesses."""
+    iam = f"arn:aws:iam::{AWS_ACCOUNT}"
+    report = "iam:GenerateCredentialReport, iam:GetCredentialReport"
+    stale_key = {
+        "slot": 1,
+        "active": True,
+        "last_rotated": "2024-03-01T10:00:00+00:00",
+        "last_used": "2025-06-30T08:15:00+00:00",
+    }
+    blocked = dict.fromkeys(
+        ("block_public_acls", "ignore_public_acls", "block_public_policy"), True
+    )
+    return [
+        _aws(
+            "aws.iam.account",
+            f"{iam}:root",
+            "root user",
+            {"root_mfa_enabled": True, "root_access_keys_present": False},
+            "iam:GetAccountSummary",
+        ),
+        _aws(
+            "aws.iam.password_policy",
+            f"{iam}:password-policy",
+            "account password policy",
+            {"exists": True, "minimum_length": 8},
+            "iam:GetAccountPasswordPolicy",
+        ),
+        _aws(
+            "aws.iam.user",
+            f"{iam}:user/alice",
+            "alice",
+            {"password_enabled": True, "mfa_active": False, "access_keys": []},
+            report,
+        ),
+        _aws(
+            "aws.iam.user",
+            f"{iam}:user/ci-deploy",
+            "ci-deploy",
+            {"password_enabled": False, "mfa_active": False, "access_keys": [stale_key]},
+            report,
+        ),
+        _aws(
+            "aws.iam.admin_policy",
+            "arn:aws:iam::aws:policy/AdministratorAccess",
+            "AdministratorAccess",
+            {"users": ["alice"], "groups": [], "roles": ["Admin"]},
+            "iam:ListEntitiesForPolicy",
+        ),
+        _aws(
+            "aws.s3.account_settings",
+            f"arn:aws:s3:::account/{AWS_ACCOUNT}",
+            "S3 account settings",
+            {**blocked, "restrict_public_buckets": False},
+            "s3:GetAccountPublicAccessBlock",
+        ),
+        _aws(
+            "aws.s3.bucket",
+            "arn:aws:s3:::demo-public-assets",
+            "demo-public-assets",
+            {
+                "policy_public": True,
+                "acl_public": False,
+                **dict.fromkeys((*blocked, "restrict_public_buckets"), False),
+            },
+            "s3:GetBucketPolicyStatus, s3:GetBucketAcl, s3:GetPublicAccessBlock",
+            region="eu-west-2",
+        ),
+        _aws(
+            "aws.rds.db_instance",
+            f"arn:aws:rds:eu-west-2:{AWS_ACCOUNT}:db:orders-db",
+            "orders-db",
+            {"engine": "postgres", "publicly_accessible": True},
+            "rds:DescribeDBInstances",
+            region="eu-west-2",
+        ),
+    ]
+
+
 def sample_aws_inventory() -> Inventory:
     resources = [
         _sg(
@@ -63,6 +163,7 @@ def sample_aws_inventory() -> Inventory:
             source_operation="cloudtrail:DescribeTrails",
             collected_at=COLLECTED_AT,
         ),
+        *_aws_account_resources(),
     ]
     return Inventory(
         provider=Provider.AWS,
@@ -110,7 +211,11 @@ def sample_azure_inventory() -> Inventory:
             resource_type="azure.storage.account",
             resource_id=f"{_AZURE_RG}/Microsoft.Storage/storageAccounts/demopublicdata",
             name="demopublicdata",
-            properties={"allow_blob_public_access": None},
+            properties={
+                "allow_blob_public_access": None,
+                "https_only": True,
+                "minimum_tls_version": "TLS1_0",
+            },
             source_operation="Microsoft.Storage/storageAccounts/read",
             collected_at=COLLECTED_AT,
         ),
@@ -121,8 +226,63 @@ def sample_azure_inventory() -> Inventory:
             resource_type="azure.storage.account",
             resource_id=f"{_AZURE_RG}/Microsoft.Storage/storageAccounts/demoprivatedata",
             name="demoprivatedata",
-            properties={"allow_blob_public_access": False},
+            properties={
+                "allow_blob_public_access": False,
+                "https_only": True,
+                "minimum_tls_version": "TLS1_2",
+            },
             source_operation="Microsoft.Storage/storageAccounts/read",
+            collected_at=COLLECTED_AT,
+        ),
+        Resource(
+            provider=Provider.AZURE,
+            account_id=AZURE_SUBSCRIPTION,
+            region="uksouth",
+            resource_type="azure.sql.server",
+            resource_id=f"{_AZURE_RG}/Microsoft.Sql/servers/demo-sql",
+            name="demo-sql",
+            properties={
+                "public_network_access": "Enabled",
+                "firewall_rules": [
+                    {
+                        "name": "AllowAllWindowsAzureIps",
+                        "start_ip": "0.0.0.0",  # noqa: S104  firewall data, not a binding
+                        "end_ip": "0.0.0.0",  # noqa: S104
+                    }
+                ],
+            },
+            source_operation="Microsoft.Sql/servers/read, Microsoft.Sql/servers/firewallRules/read",
+            collected_at=COLLECTED_AT,
+        ),
+        Resource(
+            provider=Provider.AZURE,
+            account_id=AZURE_SUBSCRIPTION,
+            region="global",
+            resource_type="azure.monitor.activity_log_export",
+            resource_id=(
+                f"/subscriptions/{AZURE_SUBSCRIPTION}/providers/Microsoft.Insights/diagnosticSettings"
+            ),
+            name="Activity Log diagnostic settings",
+            properties={"settings": []},
+            source_operation="Microsoft.Insights/diagnosticSettings/read",
+            collected_at=COLLECTED_AT,
+        ),
+        Resource(
+            provider=Provider.AZURE,
+            account_id=AZURE_SUBSCRIPTION,
+            region="global",
+            resource_type="azure.security.defender_plans",
+            resource_id=f"/subscriptions/{AZURE_SUBSCRIPTION}/providers/Microsoft.Security/pricings",
+            name="Microsoft Defender for Cloud plans",
+            properties={
+                "plans": {
+                    "KeyVaults": "Free",
+                    "SqlServers": "Standard",
+                    "StorageAccounts": "Standard",
+                    "VirtualMachines": "Standard",
+                }
+            },
+            source_operation="Microsoft.Security/pricings/read",
             collected_at=COLLECTED_AT,
         ),
     ]

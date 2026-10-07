@@ -9,6 +9,7 @@ Same principles as the AWS collectors:
 API calls made (all GET, all on the guard's allowlist):
   GET .../providers/Microsoft.Network/networkSecurityGroups   (whole subscription)
   GET .../providers/Microsoft.Storage/storageAccounts         (whole subscription)
+SQL servers, Activity Log export and Defender plans: see collect_arm.py.
 """
 
 import logging
@@ -21,6 +22,12 @@ from azure.mgmt.storage import StorageManagementClient
 
 from app.domain.enums import Provider
 from app.domain.inventory import CollectionGap, Inventory, NetworkIngressRule, Resource
+from app.providers.azure.arm import ArmReader
+from app.providers.azure.collect_arm import (
+    collect_activity_log_export,
+    collect_defender_plans,
+    collect_sql_servers,
+)
 from app.providers.azure.errors import describe_azure_error
 from app.providers.azure.guard import guarded_client
 from app.providers.common import ReadOnlyViolation
@@ -140,6 +147,8 @@ def normalize_storage_account(raw: Any, subscription_id: str, collected_at: date
             "resource_group": _resource_group(raw.id),
             # None means "never set", which Azure treats as allowed (see AZ-STO-001).
             "allow_blob_public_access": raw.allow_blob_public_access,
+            "https_only": raw.enable_https_traffic_only,
+            "minimum_tls_version": _text(raw.minimum_tls_version) or None,
         },
         source_operation="Microsoft.Storage/storageAccounts/read",
         collected_at=collected_at,
@@ -191,12 +200,23 @@ def collect_inventory(
         lambda raw: normalize_storage_account(raw, subscription_id, collected_at),
     )
     resources = nsgs + accounts
+    gaps = nsg_gaps + storage_gaps
+    arm = ArmReader(credential)
+    for found, missing in (
+        collect_sql_servers(arm, subscription_id, collected_at),
+        collect_activity_log_export(arm, subscription_id, collected_at),
+        collect_defender_plans(arm, subscription_id, collected_at),
+    ):
+        resources += found
+        gaps += missing
+
     if regions:
         wanted = {r.lower() for r in regions}
-        resources = [r for r in resources if r.region in wanted]
+        # Subscription-wide settings ("global") always stay in scope.
+        resources = [r for r in resources if r.region in wanted or r.region == "global"]
         scope = sorted(wanted)
     else:
-        scope = sorted({r.region for r in resources})
+        scope = sorted({r.region for r in resources if r.region != "global"})
 
     inventory = Inventory(
         provider=Provider.AZURE,
@@ -204,7 +224,7 @@ def collect_inventory(
         regions=tuple(scope),
         collected_at=collected_at,
         resources=tuple(resources),
-        gaps=tuple(nsg_gaps + storage_gaps),
+        gaps=tuple(gaps),
     )
     logger.info(
         "azure inventory collected",

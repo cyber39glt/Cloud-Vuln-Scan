@@ -70,12 +70,22 @@ def trail(name: str, *, multi_region: bool, logging: bool) -> Resource:
     )
 
 
-def storage_account(name: str, allow_public: bool | None) -> Resource:
+def storage_account(
+    name: str,
+    allow_public: bool | None,
+    *,
+    https_only: bool | None = True,
+    minimum_tls_version: str | None = "TLS1_2",
+) -> Resource:
     return resource(
         Provider.AZURE,
         "azure.storage.account",
         name,
-        properties={"allow_blob_public_access": allow_public},
+        properties={
+            "allow_blob_public_access": allow_public,
+            "https_only": https_only,
+            "minimum_tls_version": minimum_tls_version,
+        },
     )
 
 

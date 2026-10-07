@@ -51,7 +51,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
 | `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure **M6–M7 ✓** ([guide](azure-connection.md)) |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
-| `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
+| `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓**; 19 rules after **R1 ✓** ([list](rules.md#enabled-rules)) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `storage` | Database models, migrations, client-scoped repository ([data model](data-model.md)) | **M4 ✓** |
 | `scanning` | One safe sequence: connect → verify account → collect → evaluate | **M3 ✓** |
@@ -169,6 +169,7 @@ The same container image runs everywhere; only environment variables differ
 | **M5** | **JSON + CSV exports** ✓ |
 | **M6** | **Azure connector: multi-tenant app, validation, read-only guard** ✓ |
 | **M7** | **Azure collectors + scan (ARM)** ✓ — Entra ID (Graph) checks come with new rules |
+| **R1** | **Rule expansion: IAM, S3, RDS, Azure storage transport, SQL, Activity Log, Defender** ✓ ([ADR 0018](decisions/0018-rule-expansion-r1.md)) |
 | M8 | API + background worker + scan progress |
 | M9 | Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log |
 | M10 | Dashboard |

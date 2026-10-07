@@ -102,7 +102,7 @@ def test_severity_ordering():
 
 
 def test_unknown_property_keys_are_kept_but_unknown_fields_rejected():
-    assert storage_account("s", None).properties == {"allow_blob_public_access": None}
+    assert storage_account("s", None).properties["allow_blob_public_access"] is None
     with pytest.raises(ValidationError):
         Inventory(
             provider=Provider.AWS,

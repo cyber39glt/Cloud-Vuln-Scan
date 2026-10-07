@@ -18,10 +18,30 @@ from app.domain.enums import Provider
 from app.providers.common import ReadOnlyViolation
 from app.rules.registry import ALL_RULES
 
-__all__ = ["ReadOnlyViolation", "guarded_session", "install_guard", "assessment_operations"]
+__all__ = [
+    "ReadOnlyViolation",
+    "guarded_session",
+    "install_guard",
+    "assessment_operations",
+    "assessment_permissions",
+]
 
 # Read operations are named Describe*, List* or Get* in AWS APIs.
 READ_PREFIXES = ("Describe", "List", "Get")
+
+# The ONLY exception to the prefix rule, each justified:
+# - iam:GenerateCredentialReport asks IAM to (re)build the account's credential report,
+#   which GetCredentialReport then reads. It changes no configuration and AWS classifies
+#   it as a Read-level action; it is part of the AWS-managed SecurityAudit policy.
+READ_ONLY_EXCEPTIONS: frozenset[str] = frozenset({"iam:GenerateCredentialReport"})
+
+# Rules declare IAM permission names (what the client must grant). The guard checks
+# API operation names (what the SDK sends). They are the same except for these:
+OPERATION_FOR_PERMISSION: dict[str, str] = {
+    "s3:ListAllMyBuckets": "s3:ListBuckets",
+    "s3:GetBucketPublicAccessBlock": "s3:GetPublicAccessBlock",
+    "s3:GetAccountPublicAccessBlock": "s3:GetPublicAccessBlock",  # S3 Control API
+}
 
 # The platform's own identity may only do two things: say who it is, and request
 # the client's read-only role. Nothing else.
@@ -31,16 +51,27 @@ PLATFORM_OPERATIONS: frozenset[str] = frozenset({"sts:GetCallerIdentity", "sts:A
 CONNECTOR_OPERATIONS: frozenset[str] = frozenset({"sts:GetCallerIdentity", "ec2:DescribeRegions"})
 
 
-def assessment_operations() -> frozenset[str]:
-    """Everything allowed inside a client account: exactly the permissions the
-    enabled rules declare, plus the connector's own needs. One source of truth."""
-    from_rules = {
+def assessment_permissions() -> frozenset[str]:
+    """The IAM permissions the enabled rules declare (what clients must grant)."""
+    return frozenset(
         permission
         for rule in ALL_RULES
         for permission in rule.metadata.required_permissions.get(Provider.AWS, ())
-    }
-    operations = frozenset(from_rules | CONNECTOR_OPERATIONS)
-    not_reads = [op for op in operations if not op.split(":", 1)[1].startswith(READ_PREFIXES)]
+    )
+
+
+def assessment_operations() -> frozenset[str]:
+    """Every API operation allowed inside a client account: exactly what the enabled
+    rules declare (translated to API names), plus the connector's own needs."""
+    operations = frozenset(
+        {OPERATION_FOR_PERMISSION.get(p, p) for p in assessment_permissions()}
+        | CONNECTOR_OPERATIONS
+    )
+    not_reads = [
+        op
+        for op in operations
+        if op not in READ_ONLY_EXCEPTIONS and not op.split(":", 1)[1].startswith(READ_PREFIXES)
+    ]
     if not_reads:
         raise ValueError(f"non-read operations cannot be allowed in client accounts: {not_reads}")
     return operations
