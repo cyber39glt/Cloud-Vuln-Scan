@@ -49,7 +49,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `core` | Configuration, logging, database engine | **M0 ✓** |
 | `api` | HTTP routes | Health only (**M0 ✓**) |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
-| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | Planned |
+| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS connection **M2 ✓** ([guide](aws-connection.md)); collectors M3; Azure M6 |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
@@ -89,6 +89,14 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### M2: AWS connector
+
+- Read-only guard: allowlist of AWS operations enforced before any request is built
+- AssumeRole with ExternalId into the client role; temporary credentials in memory only
+- Connection validation (identity, role, account match, permissions, guard self-test)
+- Client CloudFormation template with an explicit Deny on reading data and secrets
+- `dev.ps1 aws external-id` / `dev.ps1 aws validate`
+
 ### M1: domain model and rule engine
 
 - Provider-neutral models for inventory, check results, evidence and findings
@@ -112,7 +120,7 @@ The same container image runs everywhere; only environment variables differ
 |---|---|
 | **M0** | **Project foundation** ✓ |
 | **M1** | **Domain model + rule engine on fixture data (no cloud)** ✓ |
-| M2 | AWS connector: AssumeRole + ExternalId, validation, read-only guard |
+| **M2** | **AWS connector: AssumeRole + ExternalId, validation, read-only guard** ✓ |
 | M3 | AWS collectors + AWS rules; misconfigured test environment in our own sandbox |
 | M4 | Persistence: schema, migrations, stored scan runs |
 | M5 | JSON + CSV exports |

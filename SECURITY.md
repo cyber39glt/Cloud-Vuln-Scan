@@ -18,7 +18,8 @@ Read-only behaviour is enforced in two independent layers (see
 1. **Client-side permissions:** clients grant only read-only roles.
 2. **Application-side guard:** the platform allows only an explicit list of read
    operations and blocks every other cloud API call before it is sent, even if the
-   granted credentials would allow more.
+   granted credentials would allow more. Implemented for AWS in
+   `backend/app/providers/aws/guard.py` (see [docs/aws-connection.md](docs/aws-connection.md)).
 
 A contribution that weakens either layer will not be accepted.
 

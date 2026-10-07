@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Read-only security assessment role. Grants the assessing consultancy temporary,
+  read-only access to configuration metadata in this account. It cannot change,
+  create or delete anything, and it is explicitly denied from reading stored data
+  and secrets. Remove access at any time by deleting this stack.
+
+# -----------------------------------------------------------------------------
+# Deployed BY THE CLIENT, in the account being assessed. Nothing else is installed.
+# Layer 1 of the read-only boundary (docs/decisions/0002-read-only-security-boundary.md).
+# -----------------------------------------------------------------------------
+
+Parameters:
+  AssessorPrincipalArn:
+    Type: String
+    Description: >-
+      ARN of the consultancy's platform identity, exactly as given in your setup
+      instructions. Only this identity can use the role.
+    AllowedPattern: '^arn:aws:iam::\d{12}:(root|user/[\w+=,.@/-]+|role/[\w+=,.@/-]+)$'
+    ConstraintDescription: Must be an IAM user, role or account root ARN.
+
+  ExternalId:
+    Type: String
+    NoEcho: true
+    Description: >-
+      The ExternalId from your setup instructions. It is unique to your organization
+      and prevents anyone else from using this role through the consultancy.
+    MinLength: 2
+    MaxLength: 1224
+    AllowedPattern: '^[\w+=,.@:/-]+$'
+
+  RoleName:
+    Type: String
+    Default: SubtleTechSecurityAssessment
+    Description: Name of the role. Keep the default unless instructed otherwise.
+    AllowedPattern: '^[\w+=,.@-]{1,64}$'
+
+Resources:
+  AssessmentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Read-only security assessment access (no data, no changes).
+      # Temporary credentials issued for this role last at most one hour.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OnlyTheAssessorWithTheCorrectExternalId
+            Effect: Allow
+            Principal:
+              AWS: !Ref AssessorPrincipalArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      # AWS-managed read-only policies for security review.
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/SecurityAudit
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/job-function/ViewOnlyAccess
+      Policies:
+        # An explicit Deny always wins over any Allow, including permissions added
+        # to this role later. The assessment needs configuration, never contents.
+        - PolicyName: DenyReadingDataAndSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DenyDataAndSecretReads
+                Effect: Deny
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - secretsmanager:GetSecretValue
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                  - ssm:GetParameterHistory
+                  - kms:Decrypt
+                  - lambda:GetFunction
+                  - ec2:GetPasswordData
+                  - ec2:GetConsoleOutput
+                  - ec2:GetConsoleScreenshot
+                  - dynamodb:GetItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                  - logs:StartQuery
+                  - athena:GetQueryResults
+                  - sqs:ReceiveMessage
+                  - kinesis:GetRecords
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - codecommit:GetFile
+                  - codecommit:GetBlob
+                Resource: "*"
+      Tags:
+        - Key: Purpose
+          Value: Read-only security assessment
+
+Outputs:
+  RoleArn:
+    Description: Send this value back to the consultancy (it is not a secret).
+    Value: !GetAtt AssessmentRole.Arn

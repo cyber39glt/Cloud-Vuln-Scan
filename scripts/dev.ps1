@@ -14,7 +14,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
-                 "secrets", "check", "build", "reset", "demo")]
+                 "secrets", "check", "build", "reset", "demo", "aws")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -76,6 +76,9 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   check     lint + test + secrets (what CI runs)
   build     Build the production image ($ProdImage)
   demo      Run the rule engine on sample data (add -json for the full dataset)
+  aws       AWS connection tools, e.g.:
+              aws external-id
+              aws validate --account-id 123456789012 --external-id <id>
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
@@ -126,6 +129,10 @@ try {
             Invoke-Compose @("run", "--rm", "--no-deps", "api", "ruff", "format", ".")
         }
         "secrets" { Invoke-SecretScan }
+        "aws" {
+            # Uses the platform AWS identity from .env (see docs/aws-connection.md).
+            Invoke-Compose (@("run", "--rm", "--no-deps", "api", "python", "-m", "app.cli", "aws") + $ExtraArgs)
+        }
         "demo" {
             Write-Step "Rule engine demo on sample AWS + Azure data (no cloud access)"
             $demoArgs = @($ExtraArgs | ForEach-Object { if ($_ -eq "-json") { "--json" } else { $_ } })
