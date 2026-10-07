@@ -6,7 +6,7 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M7, Azure scanning).**
+> **Status: early development (milestone R1, 19 security rules).**
 > AWS accounts and Azure subscriptions can be assessed from the command line, results
 > are stored per client and exported as JSON/CSV. User accounts, the web dashboard and
 > PDF reports are not built yet.

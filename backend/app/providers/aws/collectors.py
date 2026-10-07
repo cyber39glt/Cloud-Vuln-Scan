@@ -8,9 +8,10 @@ Principles:
   CollectionGap, which the engine reports as "not evaluated".
 - A ReadOnlyViolation is a code bug, never a gap: it is re-raised immediately.
 
-API calls made (all on the guard's allowlist):
+API calls made here (all on the guard's allowlist):
   ec2:DescribeRegions, ec2:DescribeSecurityGroups,
   cloudtrail:DescribeTrails, cloudtrail:GetTrailStatus
+IAM, S3 and RDS collection lives in collect_iam.py, collect_s3.py, collect_rds.py.
 """
 
 import logging
@@ -20,6 +21,9 @@ from typing import Any
 
 from app.domain.enums import Provider
 from app.domain.inventory import CollectionGap, Inventory, NetworkIngressRule, Resource
+from app.providers.aws.collect_iam import collect_iam
+from app.providers.aws.collect_rds import collect_rds
+from app.providers.aws.collect_s3 import collect_s3
 from app.providers.aws.errors import describe_aws_error
 from app.providers.aws.guard import ReadOnlyViolation
 from app.providers.aws.session import CLIENT_CONFIG
@@ -212,6 +216,7 @@ def collect_inventory(
     default_region: str,
     regions: list[str] | None = None,
     clock: Callable[[], datetime] = _utc_now,
+    sleep: Callable[[float], None] | None = None,
 ) -> Inventory:
     """Collect everything the enabled AWS rules need from one account.
 
@@ -240,16 +245,24 @@ def collect_inventory(
     else:
         scope = available
 
-    security_groups, sg_gaps = collect_security_groups(session, account_id, scope, collected_at)
-    trails, trail_gaps = collect_trails(session, account_id, default_region, collected_at)
+    resources: list[Resource] = []
+    for found, missing in (
+        collect_security_groups(session, account_id, scope, collected_at),
+        collect_trails(session, account_id, default_region, collected_at),
+        collect_iam(session, account_id, collected_at, sleep=sleep),
+        collect_s3(session, account_id, scope if regions else None, collected_at),
+        collect_rds(session, account_id, scope, collected_at),
+    ):
+        resources += found
+        gaps += missing
 
     inventory = Inventory(
         provider=Provider.AWS,
         account_id=account_id,
         regions=tuple(scope),
         collected_at=collected_at,
-        resources=tuple(security_groups + trails),
-        gaps=tuple(gaps + sg_gaps + trail_gaps),
+        resources=tuple(resources),
+        gaps=tuple(gaps),
     )
     logger.info(
         "aws inventory collected",

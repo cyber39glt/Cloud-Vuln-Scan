@@ -12,6 +12,8 @@ from azure.mgmt.network.models import SecurityRule
 
 from app.cli import main as cli_main
 from app.domain.enums import CheckStatus
+from app.providers.azure.arm import ArmReader
+from app.providers.azure.collect_arm import ACTIVITY_LOG, DEFENDER, collect_sql_servers
 from app.providers.azure.collectors import (
     NSG,
     STORAGE_ACCOUNT,
@@ -21,7 +23,18 @@ from app.providers.azure.collectors import (
 from app.providers.azure.session import AzureConnection
 from app.providers.common import ReadOnlyViolation
 from app.scanning import WrongAccountError, scan_azure
-from tests.azure_fakes import SUB, TENANT, FakeCredential, arm_url, mock_subscription
+from tests.azure_fakes import (
+    EXPORTED_ACTIVITY_LOG,
+    SUB,
+    TENANT,
+    FakeCredential,
+    arm_url,
+    firewall_rule,
+    mock_arm_lists,
+    mock_subscription,
+    pricing,
+    sql_server,
+)
 
 NOW = datetime(2026, 1, 15, tzinfo=UTC)
 CONNECTION = AzureConnection(TENANT, SUB)
@@ -57,7 +70,9 @@ def _exposed(name: str, source: str, port: str, access: str = "Allow") -> dict:
 
 
 def _storage(name: str, location: str, public: bool | None) -> dict:
-    properties = {} if public is None else {"allowBlobPublicAccess": public}
+    properties = {"supportsHttpsTrafficOnly": True, "minimumTlsVersion": "TLS1_2"}
+    if public is not None:
+        properties["allowBlobPublicAccess"] = public
     return {
         "id": f"{RG}/Microsoft.Storage/storageAccounts/{name}",
         "name": name,
@@ -67,7 +82,7 @@ def _storage(name: str, location: str, public: bool | None) -> dict:
     }
 
 
-def _mock_lists(rsps, nsgs=(), accounts=(), nsg_status=200):
+def _mock_lists(rsps, nsgs=(), accounts=(), nsg_status=200, **arm_lists):
     nsg_body = (
         {"value": list(nsgs)}
         if nsg_status == 200
@@ -82,6 +97,7 @@ def _mock_lists(rsps, nsgs=(), accounts=(), nsg_status=200):
         arm_url(f"/subscriptions/{SUB}/providers/Microsoft.Storage/storageAccounts"),
         json={"value": list(accounts)},
     )
+    mock_arm_lists(rsps, **arm_lists)
 
 
 # ------------------------------------------------------------------ normalization
@@ -168,7 +184,7 @@ def test_region_scope_discards_other_locations():
         )
         inventory = collect_inventory(FakeCredential(), SUB, regions=["UKSouth"])
 
-    assert [r.name for r in inventory.resources] == ["uk"]
+    assert [r.name for r in inventory.resources if r.region != "global"] == ["uk"]
     assert inventory.regions == ("uksouth",)
 
 
@@ -212,6 +228,13 @@ def _planted_weaknesses(rsps):
             _storage("unsetpublic", "uksouth", None),
             _storage("privatedata", "uksouth", False),
         ],
+        sql_servers={
+            "open-sql": [
+                firewall_rule("AllowAll", "0.0.0.0", "255.255.255.255"),
+                firewall_rule("AllowAllWindowsAzureIps", "0.0.0.0", "0.0.0.0"),
+            ],
+            "private-sql": [firewall_rule("office", "203.0.113.10", "203.0.113.10")],
+        },
     )
 
 
@@ -225,6 +248,8 @@ def test_full_scan_finds_the_planted_weaknesses(settings):
         ("NET-001", "ssh-open"),
         ("NET-002", "rdp-open"),
         ("AZ-STO-001", "unsetpublic"),
+        ("AZ-EXP-001", "open-sql"),
+        ("AZ-EXP-002", "open-sql"),
     }
     [rdp] = [f for f in result.findings if f.rule_id == "NET-002"]
     cis = [r.control_id for r in rdp.framework_refs if r.framework.value == "cis_azure"]
@@ -319,3 +344,125 @@ def test_sandbox_fixture_template_produces_the_documented_findings():
         ("NET-002", "cvs-test-all-open"),
         ("NET-002", "cvs-test-rdp-open"),
     ]
+
+
+# ------------------------------------------------------------------ ARM lists (SQL, logs, Defender)
+
+
+def test_sql_servers_follow_next_link_pages_and_keep_only_firewall_ranges():
+    providers = f"/subscriptions/{SUB}/providers"
+    first, second = sql_server("sql-a"), sql_server("sql-b", "Disabled")
+    next_link = f"https://management.azure.com{providers}/Microsoft.Sql/servers?page=2"
+    with responses.RequestsMock() as rsps:
+        rsps.get(
+            arm_url(f"{providers}/Microsoft.Sql/servers"),
+            json={"value": [first], "nextLink": next_link},
+        )
+        rsps.get(next_link, json={"value": [second]})
+        rsps.get(
+            arm_url(f"{first['id']}/firewallRules"),
+            json={"value": [firewall_rule("office", "203.0.113.10", "203.0.113.20")]},
+        )
+        rsps.get(arm_url(f"{second['id']}/firewallRules"), json={"value": []})
+        resources, gaps = collect_sql_servers(ArmReader(FakeCredential()), SUB, NOW)
+
+    assert gaps == []
+    servers = {r.name: r.properties for r in resources}
+    assert servers["sql-a"] == {
+        "public_network_access": "Enabled",
+        "firewall_rules": [
+            {"name": "office", "start_ip": "203.0.113.10", "end_ip": "203.0.113.20"}
+        ],
+    }
+    assert servers["sql-b"]["public_network_access"] == "Disabled"
+
+
+def test_next_link_to_another_host_is_blocked_by_the_guard():
+    providers = f"/subscriptions/{SUB}/providers"
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.get(
+            arm_url(f"{providers}/Microsoft.Sql/servers"),
+            json={"value": [], "nextLink": "https://attacker.example/steal"},
+        )
+        with pytest.raises(ReadOnlyViolation):
+            collect_sql_servers(ArmReader(FakeCredential()), SUB, NOW)
+        assert len(rsps.calls) == 1  # the redirect target was never contacted
+
+
+def test_unreadable_firewall_rules_are_a_gap_for_that_server_only():
+    providers = f"/subscriptions/{SUB}/providers"
+    denied, readable = sql_server("denied"), sql_server("readable")
+    with responses.RequestsMock() as rsps:
+        rsps.get(arm_url(f"{providers}/Microsoft.Sql/servers"), json={"value": [denied, readable]})
+        rsps.get(
+            arm_url(f"{denied['id']}/firewallRules"),
+            json={"error": {"code": "AuthorizationFailed", "message": "no"}},
+            status=403,
+        )
+        rsps.get(arm_url(f"{readable['id']}/firewallRules"), json={"value": []})
+        resources, gaps = collect_sql_servers(ArmReader(FakeCredential()), SUB, NOW)
+
+    assert [r.name for r in resources] == ["readable"]
+    [gap] = gaps
+    assert gap.reason == "server denied: AuthorizationFailed"
+
+
+def test_activity_log_settings_are_summarized_without_destination_ids():
+    with responses.RequestsMock() as rsps:
+        mock_arm_lists(
+            rsps,
+            diagnostic_settings=[
+                EXPORTED_ACTIVITY_LOG,
+                {
+                    "name": "disabled",
+                    "properties": {"logs": [{"category": "Administrative", "enabled": False}]},
+                },
+            ],
+        )
+        inventory = collect_inventory(FakeCredential(), SUB, regions=["uksouth"], clock=lambda: NOW)
+
+    [export] = inventory.of_type(ACTIVITY_LOG)
+    assert export.region == "global"  # subscription-wide: kept despite the region filter
+    assert export.properties == {
+        "settings": [
+            {
+                "name": "to-workspace",
+                "has_destination": True,
+                "enabled_categories": ["Administrative", "Security"],
+            },
+            {"name": "disabled", "has_destination": False, "enabled_categories": []},
+        ]
+    }
+    [defender] = inventory.of_type(DEFENDER)
+    assert set(defender.properties["plans"].values()) == {"Standard"}
+
+
+@pytest.mark.parametrize(
+    "failing", ["Microsoft.Insights/diagnosticSettings", "Microsoft.Security/pricings"]
+)
+def test_account_settings_access_denied_is_a_gap_and_rule_not_evaluated(settings, failing):
+    providers = f"/subscriptions/{SUB}/providers"
+    # The 403 is registered first, so it wins over the default mock for the same URL.
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        mock_subscription(rsps)
+        rsps.get(
+            arm_url(f"{providers}/{failing}"),
+            json={"error": {"code": "AuthorizationFailed", "message": "no"}},
+            status=403,
+        )
+        _mock_lists(rsps)
+        result = scan_azure(CONNECTION, settings, credential=FakeCredential())
+
+    rule_id = "AZ-LOG-001" if "Insights" in failing else "AZ-SEC-001"
+    [check] = [r for r in result.results if r.rule_id == rule_id]
+    assert check.status == CheckStatus.ERROR  # NOT a false "not exported / not enabled"
+    assert not [f for f in result.findings if f.rule_id == rule_id]
+
+
+def test_scan_reports_missing_activity_log_export_and_defender_plans(settings):
+    with responses.RequestsMock() as rsps:
+        mock_subscription(rsps)
+        _mock_lists(rsps, diagnostic_settings=[], pricings=[pricing("VirtualMachines", "Free")])
+        result = scan_azure(CONNECTION, settings, credential=FakeCredential())
+
+    assert {"AZ-LOG-001", "AZ-SEC-001"} <= {f.rule_id for f in result.findings}

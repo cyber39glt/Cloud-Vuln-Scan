@@ -12,9 +12,11 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 from app.core.config import Settings
 from app.providers.aws.errors import describe_aws_error
-from app.providers.aws.guard import ReadOnlyViolation, assessment_operations
+from app.providers.aws.guard import ReadOnlyViolation, assessment_permissions
 from app.providers.aws.session import (
     CLIENT_CONFIG,
     AwsConnection,
@@ -25,19 +27,54 @@ from app.providers.common import ValidationReport
 
 logger = logging.getLogger(__name__)
 
-Probe = Callable[[Any], object]
+Probe = Callable[[Any, str], object]  # (session, account_id)
+
+ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
+
+
+def _absent_is_fine(call: Callable[[], object], *codes: str) -> object:
+    """Some reads answer "not configured" with an error code; for a permission
+    probe that still proves the permission works."""
+    try:
+        return call()
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in codes:
+            return None
+        raise
+
+
+def _client(session: Any, service: str) -> Any:
+    return session.client(service, config=CLIENT_CONFIG)
+
 
 # One cheap, read-only call per permission. None = cannot be probed without
-# knowing a specific resource; it is verified during collection instead.
+# knowing a specific resource (or without side effects); verified during collection.
 PERMISSION_PROBES: dict[str, Probe | None] = {
-    "ec2:DescribeRegions": lambda s: s.client("ec2", config=CLIENT_CONFIG).describe_regions(),
-    "ec2:DescribeSecurityGroups": lambda s: s.client(
-        "ec2", config=CLIENT_CONFIG
-    ).describe_security_groups(MaxResults=5),
-    "cloudtrail:DescribeTrails": lambda s: s.client(
-        "cloudtrail", config=CLIENT_CONFIG
-    ).describe_trails(),
+    "ec2:DescribeRegions": lambda s, _: _client(s, "ec2").describe_regions(),
+    "ec2:DescribeSecurityGroups": lambda s, _: _client(s, "ec2").describe_security_groups(
+        MaxResults=5
+    ),
+    "cloudtrail:DescribeTrails": lambda s, _: _client(s, "cloudtrail").describe_trails(),
     "cloudtrail:GetTrailStatus": None,
+    "iam:GetAccountSummary": lambda s, _: _client(s, "iam").get_account_summary(),
+    "iam:GetAccountPasswordPolicy": lambda s, _: _absent_is_fine(
+        _client(s, "iam").get_account_password_policy, "NoSuchEntity"
+    ),
+    "iam:ListEntitiesForPolicy": lambda s, _: _client(s, "iam").list_entities_for_policy(
+        PolicyArn=ADMIN_POLICY_ARN, MaxItems=1
+    ),
+    "iam:GenerateCredentialReport": None,  # probing would rebuild the report
+    "iam:GetCredentialReport": None,
+    "s3:ListAllMyBuckets": lambda s, _: _client(s, "s3").list_buckets(),
+    "s3:GetAccountPublicAccessBlock": lambda s, account: _absent_is_fine(
+        lambda: _client(s, "s3control").get_public_access_block(AccountId=account),
+        "NoSuchPublicAccessBlockConfiguration",
+    ),
+    "s3:GetBucketLocation": None,
+    "s3:GetBucketPolicyStatus": None,
+    "s3:GetBucketAcl": None,
+    "s3:GetBucketPublicAccessBlock": None,
+    "rds:DescribeDBInstances": lambda s, _: _client(s, "rds").describe_db_instances(MaxRecords=20),
 }
 
 
@@ -83,16 +120,16 @@ def validate_connection(
         return _finish(report)
 
     # 4. Read permissions needed by the enabled rules
-    for operation in sorted(assessment_operations() - {"sts:GetCallerIdentity"}):
-        probe = PERMISSION_PROBES.get(operation)
+    for permission in sorted(assessment_permissions() | {"ec2:DescribeRegions"}):
+        probe = PERMISSION_PROBES.get(permission)
         if probe is None:
-            report.add(f"Permission {operation}", "skipped", "Verified during collection.")
+            report.add(f"Permission {permission}", "skipped", "Verified during collection.")
             continue
         try:
-            probe(session)
-            report.add(f"Permission {operation}", "ok")
+            probe(session, connection.account_id)
+            report.add(f"Permission {permission}", "ok")
         except Exception as exc:
-            report.add(f"Permission {operation}", "failed", _problem_text(exc))
+            report.add(f"Permission {permission}", "failed", _problem_text(exc))
 
     # 5. Read-only guard: this write must be stopped BEFORE reaching AWS.
     try:

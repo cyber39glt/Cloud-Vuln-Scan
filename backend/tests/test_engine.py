@@ -43,8 +43,13 @@ def test_azure_findings_get_azure_cis_references():
 
 
 def test_only_rules_for_the_inventory_provider_run():
+    from app.rules.registry import ALL_RULES
+
     result = RuleEngine().run(inventory(Provider.AZURE, storage_account("s", False)))
-    assert {r.rule_id for r in result.rules_run} == {"NET-001", "NET-002", "AZ-STO-001"}
+    ran = {r.rule_id for r in result.rules_run}
+    assert {"NET-001", "NET-002", "AZ-STO-001"} <= ran
+    assert not [rule_id for rule_id in ran if rule_id.startswith("AWS-")]
+    assert ran == {r.metadata.rule_id for r in ALL_RULES if Provider.AZURE in r.metadata.providers}
 
 
 def test_account_rule_with_collection_gap_is_not_evaluated_not_failed():
@@ -144,7 +149,12 @@ def test_findings_sorted_by_severity_and_ids_stable_between_runs():
 
 
 def test_summary_counts():
-    result = RuleEngine().run(
+    from app.rules.azure.sto_001_blob_public_access import StorageAccountAllowsPublicBlobAccess
+    from app.rules.common.net_001_ssh_open_to_internet import SshOpenToInternet
+    from app.rules.common.net_002_rdp_open_to_internet import RdpOpenToInternet
+
+    rules = (SshOpenToInternet(), RdpOpenToInternet(), StorageAccountAllowsPublicBlobAccess())
+    result = RuleEngine(rules=rules).run(
         inventory(Provider.AZURE, storage_account("public", True), storage_account("ok", False))
     )
     assert result.severity_counts()[Severity.MEDIUM] == 1

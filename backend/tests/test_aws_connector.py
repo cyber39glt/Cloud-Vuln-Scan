@@ -15,10 +15,13 @@ from app.domain.enums import Provider
 from app.providers.aws import guard
 from app.providers.aws.errors import describe_aws_error
 from app.providers.aws.guard import (
+    OPERATION_FOR_PERMISSION,
     PLATFORM_OPERATIONS,
+    READ_ONLY_EXCEPTIONS,
     READ_PREFIXES,
     ReadOnlyViolation,
     assessment_operations,
+    assessment_permissions,
     guarded_session,
 )
 from app.providers.aws.session import (
@@ -71,10 +74,15 @@ def test_platform_identity_can_only_identify_itself_and_assume_roles(aws, settin
 
 def test_assessment_allowlist_is_read_only_and_exactly_what_rules_need():
     operations = assessment_operations()
-    assert all(op.split(":")[1].startswith(READ_PREFIXES) for op in operations)
+    assert all(
+        op in READ_ONLY_EXCEPTIONS or op.split(":")[1].startswith(READ_PREFIXES)
+        for op in operations
+    )
+    assert {"iam:GenerateCredentialReport"} == READ_ONLY_EXCEPTIONS  # changes need review
     assert "sts:AssumeRole" not in operations  # no role chaining from client accounts
     for rule in ALL_RULES:
-        assert set(rule.metadata.required_permissions.get(Provider.AWS, ())) <= operations
+        for permission in rule.metadata.required_permissions.get(Provider.AWS, ()):
+            assert OPERATION_FOR_PERMISSION.get(permission, permission) in operations
 
 
 def test_allowlisted_operations_exist_in_the_aws_sdk():
@@ -97,7 +105,7 @@ def test_rule_declaring_a_write_permission_is_rejected(monkeypatch):
 
 
 def test_every_permission_has_a_probe_or_is_explicitly_skipped():
-    assert assessment_operations() - {"sts:GetCallerIdentity"} <= set(PERMISSION_PROBES)
+    assert assessment_permissions() | {"ec2:DescribeRegions"} <= set(PERMISSION_PROBES)
 
 
 # ------------------------------------------------------------------ session

@@ -15,6 +15,7 @@ from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.storage import StorageManagementClient
 
 from app.core.config import Settings
+from app.providers.azure import collect_arm
 from app.providers.azure.arm import ArmReader
 from app.providers.azure.errors import describe_azure_error
 from app.providers.azure.guard import assessment_permissions, guarded_client
@@ -33,6 +34,18 @@ PERMISSION_PROBES: dict[str, Probe | None] = {
     ),
     "Microsoft.Storage/storageAccounts/read": lambda cred, sub: next(
         iter(guarded_client(StorageManagementClient, cred, sub).storage_accounts.list()), None
+    ),
+    "Microsoft.Sql/servers/read": lambda cred, sub: ArmReader(cred).get(
+        f"/subscriptions/{sub}/providers/Microsoft.Sql/servers", collect_arm.SQL_API
+    ),
+    # Needs a server to probe; a missing permission is reported as a collection gap.
+    "Microsoft.Sql/servers/firewallRules/read": None,
+    "Microsoft.Insights/diagnosticSettings/read": lambda cred, sub: ArmReader(cred).get(
+        f"/subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings",
+        collect_arm.DIAGNOSTICS_API,
+    ),
+    "Microsoft.Security/pricings/read": lambda cred, sub: ArmReader(cred).get(
+        f"/subscriptions/{sub}/providers/Microsoft.Security/pricings", collect_arm.PRICINGS_API
     ),
 }
 

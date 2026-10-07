@@ -37,14 +37,29 @@ class ArmReader:
             ],
         )
 
-    def get(self, path: str, api_version: str) -> dict[str, Any]:
-        request = HttpRequest(
-            "GET", f"https://{ARM_HOST}{path}", params={"api-version": api_version}
-        )
+    def _send(self, request: HttpRequest) -> dict[str, Any]:
         response = self._client.send_request(request)
         if response.status_code >= 400:
             raise HttpResponseError(response=response, error_format=ARMErrorFormat)
         return response.json()
+
+    def get(self, path: str, api_version: str) -> dict[str, Any]:
+        return self._send(
+            HttpRequest("GET", f"https://{ARM_HOST}{path}", params={"api-version": api_version})
+        )
+
+    def list(self, path: str, api_version: str, max_pages: int = 100) -> list[dict[str, Any]]:
+        """All items of an ARM list, following "nextLink" pages. Each next page is a
+        full URL from Azure; it still passes through the guard (host, GET, allowlist)."""
+        body = self.get(path, api_version)
+        items = list(body.get("value", []))
+        for _ in range(max_pages):
+            next_link = body.get("nextLink")
+            if not next_link:
+                return items
+            body = self._send(HttpRequest("GET", next_link))
+            items += body.get("value", [])
+        raise RuntimeError(f"too many pages listing {path}")
 
     def subscription(self, subscription_id: str) -> dict[str, Any]:
         """{"subscriptionId", "tenantId", "displayName", "state", ...}"""
