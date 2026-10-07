@@ -21,5 +21,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0013](0013-finding-granularity-and-collection-gaps.md) | Finding granularity, collection gaps, rule purity | Accepted |
 | [0014](0014-aws-connector-and-dev-identity.md) | AWS connector: guard design, client role, dev identity | Accepted |
 | [0015](0015-persistence-and-client-isolation.md) | Persistence, database-enforced client isolation, immutable results | Accepted |
+| [0016](0016-report-dataset-and-exports.md) | Report dataset; JSON/CSV exports; CSV-injection protection | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

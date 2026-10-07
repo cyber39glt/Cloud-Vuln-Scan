@@ -55,7 +55,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `storage` | Database models, migrations, client-scoped repository ([data model](data-model.md)) | **M4 ✓** |
 | `scanning` | One safe sequence: connect → verify account → collect → evaluate | **M3 ✓** |
-| `reporting` | One dataset → JSON, CSV, PDF | Planned |
+| `reporting` | One dataset → JSON, CSV, PDF ([exports](exports.md)) | JSON/CSV **M5 ✓**; PDF M11 |
 
 ## Assessment data flow
 
@@ -90,6 +90,14 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M5: JSON and CSV exports
+
+- `AssessmentReport`: one dataset built from a stored, hash-verified scan (summary,
+  findings, not-evaluated items, notes, traceability to scan ID + SHA-256)
+- JSON export with versioned schema and published JSON Schema
+- CSV export (one row per finding) with CSV-injection protection
+- `dev.ps1 assessments export`, `demo -save` to try exports without AWS
 
 ### M4: persistence
 
@@ -140,7 +148,7 @@ The same container image runs everywhere; only environment variables differ
 | **M2** | **AWS connector: AssumeRole + ExternalId, validation, read-only guard** ✓ |
 | **M3** | **AWS collectors + scan; sandbox test fixtures** ✓ |
 | **M4** | **Persistence: schema, migrations, stored scan runs** ✓ |
-| M5 | JSON + CSV exports |
+| **M5** | **JSON + CSV exports** ✓ |
 | M6 | Azure connector: multi-tenant app, validation, read-only guard |
 | M7 | Azure collectors + rules (ARM + minimal Graph) |
 | M8 | API + background worker + scan progress |
