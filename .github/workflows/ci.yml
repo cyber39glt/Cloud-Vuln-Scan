@@ -33,7 +33,7 @@ jobs:
           sed -i "s/^APP_SECRET_KEY=.*/APP_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')/" .env
 
       - name: Build images and start PostgreSQL + API + worker
-        run: docker compose up --build --detach --wait
+        run: docker compose up --build --detach --wait db api worker
 
       - name: Apply database migrations to a fresh database
         run: docker compose run --rm api alembic upgrade head
@@ -72,10 +72,25 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Build the prod target
-        run: docker build --target prod --tag cloud-vuln-scan-api:ci ./backend
+      - name: Build the prod target (includes the dashboard)
+        run: >
+          docker build --target prod --build-context frontend=./frontend
+          --tag cloud-vuln-scan-api:ci ./backend
       - name: Production image must run as a non-root user
         run: test "$(docker run --rm --entrypoint id cloud-vuln-scan-api:ci -un)" = "app"
+      - name: Production image contains the built dashboard
+        run: docker run --rm --entrypoint test cloud-vuln-scan-api:ci -f /app/web/index.html
+
+  dashboard:
+    name: Dashboard (type-check, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Type-check, test and build in the same Node image as development
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/web" -w /web node:24-alpine
+          sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test && npm run build"
 
   secret-scan:
     name: Secret scan (Gitleaks)

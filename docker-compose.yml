@@ -1,4 +1,5 @@
-# Local development environment: PostgreSQL + the API + the scan worker.
+# Local development environment: PostgreSQL + the API + the scan worker + the
+# dashboard (Vite dev server with hot reload, at http://localhost:5173).
 # Use scripts/dev.ps1 rather than calling docker compose directly.
 #
 # Values like ${POSTGRES_USER} are read from the .env file next to this file.
@@ -83,5 +84,32 @@ services:
       retries: 4
       start_period: 15s
 
+  web:
+    # The dashboard in development: edits in frontend/ show up instantly. API calls
+    # are forwarded to the api container. (In production the API serves the built
+    # dashboard itself; see backend/Dockerfile.)
+    image: node:24-alpine
+    working_dir: /web
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run dev"]
+    environment:
+      API_PROXY_TARGET: http://api:8000
+      VITE_POLLING: "true"
+    volumes:
+      - ./frontend:/web
+      # node_modules stays inside Docker (faster, and Windows-safe).
+      - web_node_modules:/web/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
 volumes:
   pgdata:
+  web_node_modules:

@@ -6,12 +6,12 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M9, users and access control).**
-> AWS accounts and Azure subscriptions can be assessed with 19 rules from the command
-> line or through the API (scans run in a background worker); results are stored per
-> client and exported as JSON/CSV. Users log in with a password and an authenticator
-> app; Admins and Consultants see only what they may; everything is audit-logged.
-> The web dashboard and PDF reports are not built yet.
+> **Status: early development (milestone M10, web dashboard).**
+> Consultants log in to a web dashboard (password + authenticator app), register client
+> AWS accounts and Azure subscriptions, run read-only scans with live progress (19
+> rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
+> exportable as CSV/JSON. Admins manage users, client assignments and the audit log.
+> PDF reports and the finding review workflow are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -53,15 +53,17 @@ Make sure Docker Desktop is running, then from the repository folder:
 The first run downloads images and installs dependencies (a few minutes). It also
 creates your local `.env` file from `.env.example`.
 
-### 4. Check it works
-
-Open in a browser, or use PowerShell:
+### 4. Create your account and open the dashboard
 
 ```powershell
-Invoke-RestMethod http://localhost:8000/health         # -> status: ok
-Invoke-RestMethod http://localhost:8000/health/ready   # -> status: ready, database: ok
+.\scripts\dev.ps1 users create --admin --email you@yourcompany.com --name "Your Name"
 ```
 
+It prints a one-time temporary password. Open **http://localhost:5173**, log in, set up
+your authenticator app (scan the QR code) and choose your own password.
+See [the dashboard guide](docs/dashboard.md).
+
+Health checks: http://localhost:8000/health and http://localhost:8000/health/ready.
 Interactive API docs (development only): http://localhost:8000/docs
 
 ### 5. Stop it
@@ -78,17 +80,18 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 
 | Command | What it does |
 |---|---|
-| `up` | Build and start PostgreSQL + API + scan worker, then apply database migrations |
+| `up` | Build and start PostgreSQL + API + scan worker + dashboard, then apply database migrations |
 | `down` | Stop containers (database data is kept) |
 | `restart` | `down` then `up` |
 | `status` | Show containers and their health |
 | `logs` | Follow API and worker logs (Ctrl+C to stop following); `logs worker` for the worker only |
-| `test` | Run the test suite (extra args go to pytest, e.g. `test -k health`) |
+| `test` | Run the backend test suite (extra args go to pytest, e.g. `test -k health`) |
+| `webtest` | Type-check and test the dashboard |
 | `lint` | Ruff lint + format check |
 | `format` | Auto-fix and format code with Ruff |
 | `secrets` | Scan git history for committed secrets (Gitleaks) |
-| `check` | `lint` + `test` + `secrets`: the same checks CI runs |
-| `build` | Build the production image `cloud-vuln-scan-api:local` |
+| `check` | `lint` + `test` + `webtest` + `secrets`: the same checks CI runs |
+| `build` | Build the production image `cloud-vuln-scan-api:local` (API + worker + built dashboard) |
 | `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset; `demo -save "Demo Client"` stores it to try exports) |
 | `users create --admin --email ... --name ...` | Create the first administrator (prints a one-time temporary password; [guide](docs/users.md)) |
 | `users list` / `users reset-mfa --email ...` / `users reset-password --email ...` | List accounts; recover a lost authenticator or a forgotten/locked password |
@@ -152,7 +155,10 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 ├── backend/                 Python API (FastAPI)
 │   ├── app/
 │   │   ├── main.py          Application entry point
-│   │   ├── api/             HTTP routes (health checks so far)
+│   │   ├── api/             HTTP routes (auth, admin, clients, assessments, overview)
+│   │   ├── auth/            Passwords, MFA, sessions, audit log
+│   │   ├── worker.py        Background scan worker
+│   │   ├── web.py           Serves the built dashboard
 │   │   ├── core/            Configuration, logging, database
 │   │   ├── domain/          Inventory, findings and evidence models
 │   │   ├── rules/           Security rules and the rule engine
@@ -167,13 +173,17 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   ├── Dockerfile           dev and prod container images
 │   ├── pyproject.toml       Dependencies and tool settings
 │   └── uv.lock              Exact pinned dependency versions
+├── frontend/                Dashboard (React + TypeScript, built with Vite)
+│   ├── src/pages/           Login, overview, clients, assessments, reports, admin
+│   ├── src/api.ts           The only code that calls the API
+│   └── package-lock.json    Exact pinned dependency versions
 ├── docs/
 │   ├── architecture.md      Architecture overview and roadmap
 │   └── decisions/           Architecture Decision Records (ADRs)
 ├── infra/aws/               CloudFormation: client read-only role; sandbox test fixtures
 ├── infra/azure/             ARM template: sandbox test fixtures
 ├── scripts/dev.ps1          Windows development commands
-├── docker-compose.yml       Local environment: PostgreSQL + API
+├── docker-compose.yml       Local environment: PostgreSQL + API + worker + dashboard
 ├── .env.example             Documented configuration template
 └── .github/workflows/ci.yml Continuous integration
 ```
@@ -187,6 +197,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [Azure connection and sandbox testing](docs/azure-connection.md)
 - [Data model](docs/data-model.md)
 - [Report exports (JSON/CSV)](docs/exports.md)
+- [Using the dashboard](docs/dashboard.md)
 - [User accounts and logging in](docs/users.md)
 - [Using the API](docs/api.md)
 - [Security policy](SECURITY.md)

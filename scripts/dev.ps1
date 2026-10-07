@@ -15,7 +15,7 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
                  "secrets", "check", "build", "reset", "demo", "aws", "migrate",
-                 "clients", "assessments", "azure", "users")]
+                 "clients", "assessments", "azure", "users", "webtest")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -80,11 +80,12 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   restart   down, then up
   status    Show running containers and their health
   logs      Follow the API and worker logs (Ctrl+C to stop); 'logs worker' for one
-  test      Run the test suite inside the container (extra args go to pytest)
+  test      Run the backend test suite inside the container (extra args go to pytest)
+  webtest   Type-check and test the dashboard (frontend)
   lint      Check code style and common mistakes with Ruff
   format    Auto-format and auto-fix code with Ruff
   secrets   Scan the git history for committed secrets with Gitleaks
-  check     lint + test + secrets (what CI runs)
+  check     lint + test + webtest + secrets (what CI runs)
   build     Build the production image ($ProdImage)
   migrate   Apply database migrations (also done automatically by 'up')
   demo      Run the rule engine on sample data (add -json for the full dataset,
@@ -111,9 +112,9 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
               users reset-password --email someone@example.com  (forgotten / locked)
   reset     Stop everything AND delete the local database (asks first)
 
-After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
-             http://localhost:8000/docs     (interactive API docs, development only:
-             create clients, request scans and follow their progress; see docs/api.md)
+After 'up':  http://localhost:5173          THE DASHBOARD (log in here; see docs/dashboard.md)
+             http://localhost:8000/docs     (interactive API docs, development only)
+             http://localhost:8000/health   http://localhost:8000/health/ready
 "@
 }
 
@@ -134,6 +135,12 @@ function Invoke-Tests {
     Invoke-Compose (@("run", "--rm", "api", "pytest") + $ExtraArgs)
 }
 
+function Invoke-WebTests {
+    Write-Step "Dashboard: type-check and tests"
+    Invoke-Compose @("run", "--rm", "--no-deps", "web", "sh", "-c",
+        "npm ci --no-audit --no-fund && npm run typecheck && npm test")
+}
+
 function Invoke-SecretScan {
     Write-Step "Gitleaks secret scan of git history"
     Invoke-Checked "docker" @("run", "--rm", "-v", "${RepoRoot}:/repo", $GitleaksImage,
@@ -152,7 +159,8 @@ try {
             Write-Step "Starting containers"
             Invoke-Compose @("up", "--build", "--detach", "--wait")
             Invoke-Migrations
-            Write-Host "`nAPI running at http://localhost:8000  (try /health and /docs)" -ForegroundColor Green
+            Write-Host "`nDashboard: http://localhost:5173   (API: http://localhost:8000)" -ForegroundColor Green
+            Write-Host "First time? Create your admin account:  .\scripts\dev.ps1 users create --admin --email you@example.com --name `"Your Name`"" -ForegroundColor Green
             Write-Host "Scan worker running: '.\scripts\dev.ps1 logs worker' shows its activity." -ForegroundColor Green
         }
         "down"    { Write-Step "Stopping containers"; Invoke-Compose @("down") }
@@ -187,15 +195,19 @@ try {
             $demoArgs = @($ExtraArgs | ForEach-Object { if ($_ -in "-json", "-save") { "-$_" } else { $_ } })
             Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.demo") + $demoArgs)
         }
+        "webtest" { Invoke-WebTests }
         "check" {
             Invoke-Lint
             Invoke-Tests
+            Invoke-WebTests
             Invoke-SecretScan
             Write-Host "`nAll checks passed." -ForegroundColor Green
         }
         "build" {
             Write-Step "Building production image $ProdImage"
-            Invoke-Checked "docker" @("build", "--target", "prod", "--tag", $ProdImage, "./backend")
+            # The dashboard is built inside the image from the frontend folder.
+            Invoke-Checked "docker" @("build", "--target", "prod", "--build-context", "frontend=./frontend",
+                "--tag", $ProdImage, "./backend")
         }
         "reset" {
             $answer = Read-Host "This deletes the local database volume. Type 'yes' to continue"

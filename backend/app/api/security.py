@@ -41,8 +41,18 @@ SECURITY_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
+# The dashboard may load only its own scripts, styles and images (no inline scripts
+# or styles, nothing from other sites) and may talk only to this API.
+DASHBOARD_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
+    "form-action 'self'; frame-ancestors 'none'"
+)
+_API_PATHS = ("/api/", "/health")
 # The interactive docs page (development only) loads its own scripts and styles.
 _DOCS_PATHS = ("/docs", "/openapi.json")
+# Built dashboard files have content hashes in their names: safe to cache for long.
+_IMMUTABLE_PATHS = ("/assets/",)
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -68,9 +78,15 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     headers=SECURITY_HEADERS,
                 )
         response = await call_next(request)
-        for name, value in SECURITY_HEADERS.items():
-            if name == "Content-Security-Policy" and request.url.path.startswith(_DOCS_PATHS):
-                continue
+        path = request.url.path
+        headers = dict(SECURITY_HEADERS)
+        if path.startswith(_DOCS_PATHS):
+            del headers["Content-Security-Policy"]
+        elif not path.startswith(_API_PATHS):
+            headers["Content-Security-Policy"] = DASHBOARD_CSP
+        if path.startswith(_IMMUTABLE_PATHS):
+            headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        for name, value in headers.items():
             response.headers.setdefault(name, value)
         return response
 

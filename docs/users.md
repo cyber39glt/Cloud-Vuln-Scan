@@ -27,37 +27,34 @@ It prints a **temporary password**, shown only once.
 You need an authenticator app on your phone: Microsoft Authenticator, Google
 Authenticator, 1Password, Bitwarden, etc. (SMS is not supported, on purpose.)
 
-Until the dashboard exists (M10), use the interactive API page,
-**http://localhost:8000/docs**, and "Try it out" on each step:
+Open the dashboard (**http://localhost:5173** in development) and:
 
-1. `POST /api/v1/auth/login` with your e-mail and temporary password.
-2. `POST /api/v1/auth/mfa/setup` with `{}`. In your app choose "add account" →
-   "enter a setup key" and type the `secret` shown (the dashboard will show a QR code).
-3. `POST /api/v1/auth/mfa/activate` with the 6-digit code from the app. You receive
-   **10 recovery codes**: store them somewhere safe (a password manager). Each works
-   once if you lose your phone.
-4. `POST /api/v1/auth/password` with the temporary password and a new one (at least
-   12 characters; a few random words work well).
+1. Log in with your e-mail and the temporary password.
+2. Scan the **QR code** with your authenticator app (or type the key shown under
+   "Can't scan?"), then enter the 6-digit code it displays.
+3. You receive **10 recovery codes**: store them somewhere safe (a password manager).
+   Each works once if you lose your phone.
+4. Choose your own password (at least 12 characters; a few random words work well).
 
-Later logins: `login`, then `POST /api/v1/auth/mfa/verify` with `{"code": "123456"}`
-(or `{"recovery_code": "...."}`). Log out with `POST /api/v1/auth/logout` and `{}`.
+Later logins: e-mail and password, then the 6-digit code (or "Lost your phone? Use a
+recovery code"). Log out with the button at the top right.
 
 ## 3. Add colleagues (admins)
 
-- `POST /api/v1/admin/users` with e-mail, display name and role → a temporary password
-  to give them **through a separate channel** (not in the same e-mail as the address).
-- `PUT /api/v1/admin/users/{user_id}/clients/{client_id}` assigns a Consultant to a
-  client; `DELETE` on the same address removes it.
+On the **Users** page: enter e-mail, name and role and click **Create user**. A
+temporary password is shown once: give it to them **through a separate channel** (not
+in the same e-mail as the address). Tick the clients each Consultant may access.
 
 ## When something goes wrong
 
 | Problem | Fix |
 |---|---|
-| Lost phone | An admin: `POST /api/v1/admin/users/{id}/reset-mfa`. The user sets up MFA again at next login. Or use a recovery code. |
-| Forgotten password, or "locked" after 5 wrong tries | Wait 15 minutes (lock), or an admin: `POST /api/v1/admin/users/{id}/reset-password` → new temporary password. |
+| Lost phone | Use a recovery code, or an admin clicks **Reset MFA** on the Users page. The user sets up MFA again at next login. |
+| Forgotten password, or "locked" after 5 wrong tries | Wait 15 minutes (lock), or an admin clicks **Reset password** → new temporary password. |
 | Nobody can log in (e.g. the only admin lost their phone) | On the server: `.\scripts\dev.ps1 users reset-mfa --email ...` and/or `users reset-password --email ...`. |
-| Someone leaves | `PATCH /api/v1/admin/users/{id}` with `{"is_active": false}`: their sessions end at once. |
+| Someone leaves | An admin clicks **Deactivate**: their sessions end at once. |
 
 Sessions end after 30 minutes without activity, and after 12 hours at most.
-Every login, change and data access is recorded in the audit log
-(`GET /api/v1/admin/audit-events`), which nobody can edit or delete.
+Every login, change and data access is recorded in the **Audit log** (admins), which
+nobody can edit or delete. Everything here is also available through the API
+([api.md](api.md)).

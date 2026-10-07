@@ -83,6 +83,7 @@ class MeOut(BaseModel):
     role: Role
     must_change_password: bool
     mfa_enabled: bool
+    consultancy: str
 
 
 def _set_cookie(response: Response, token: str, settings: Settings) -> None:
@@ -110,7 +111,7 @@ def _error(status_code: int, detail: str) -> JSONResponse:
     return JSONResponse({"detail": detail}, status_code=status_code)
 
 
-def _me(principal: Principal) -> MeOut:
+def _me(principal: Principal, settings: Settings) -> MeOut:
     user = principal.user
     return MeOut(
         id=str(user.id),
@@ -119,6 +120,7 @@ def _me(principal: Principal) -> MeOut:
         role=user.role,
         must_change_password=user.must_change_password,
         mfa_enabled=user.mfa_enabled,
+        consultancy=settings.consultancy_name,
     )
 
 
@@ -214,8 +216,8 @@ def logout(principal: AnySession, db: DbSession, settings: AppSettings, ip: Ip) 
 
 
 @router.get("/me")
-def me(principal: VerifiedUser) -> MeOut:
-    return _me(principal)
+def me(principal: VerifiedUser, settings: AppSettings) -> MeOut:
+    return _me(principal, settings)
 
 
 @router.post("/password", status_code=status.HTTP_204_NO_CONTENT)

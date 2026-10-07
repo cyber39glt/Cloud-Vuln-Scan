@@ -26,5 +26,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0018](0018-rule-expansion-r1.md) | Rule expansion R1: credential report exception, no guessing, ARM lists | Accepted |
 | [0019](0019-api-worker-and-pre-auth-boundary.md) | Data API, scan worker, and the boundary before user authentication | Accepted (partly superseded by 0020) |
 | [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted |
+| [0021](0021-dashboard.md) | Dashboard: same-origin React app with a strict Content-Security-Policy | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

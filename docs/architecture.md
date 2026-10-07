@@ -91,6 +91,15 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### M10: dashboard
+
+- React + TypeScript web app (`frontend/`): login with QR-code MFA setup, overview of
+  all visible assessments, clients and cloud-account onboarding steps, scans with live
+  progress, reports with filters, evidence and framework references, CSV/JSON
+  downloads; admin pages for users, assignments and the audit log ([guide](dashboard.md)).
+- Served by the API in production (same origin, strict CSP); Vite dev server with
+  hot reload in development ([ADR 0021](decisions/0021-dashboard.md)).
+
 ### M9: users, MFA, roles and audit
 
 - Local accounts with Argon2id passwords; mandatory authenticator-app MFA with
@@ -192,7 +201,7 @@ The same container image runs everywhere; only environment variables differ
 | **R1** | **Rule expansion: IAM, S3, RDS, Azure storage transport, SQL, Activity Log, Defender** ✓ ([ADR 0018](decisions/0018-rule-expansion-r1.md)) |
 | **M8** | **API + background worker + scan progress** ✓ ([ADR 0019](decisions/0019-api-worker-and-pre-auth-boundary.md)) |
 | **M9** | **Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log** ✓ ([ADR 0020](decisions/0020-authentication-implementation.md)) |
-| M10 | Dashboard |
+| **M10** | **Dashboard** ✓ ([guide](dashboard.md), [ADR 0021](decisions/0021-dashboard.md)) |
 | M11 | PDF report |
 | M12 | Finding review workflow and assessment finalization |
 | M13 | Hardening: threat model, generated least-privilege policies, security review |
