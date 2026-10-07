@@ -129,12 +129,50 @@ Connection is ready.
 
 Try a wrong ExternalId: "Assume assessment role" fails with a plain-language hint.
 
+### D. Plant test weaknesses and scan
+
+1. In your **sandbox only**, deploy `infra/aws/sandbox-test-fixtures.yaml` the same way
+   (CloudFormation → Create stack → upload). Stack name: `cvs-test-fixtures`. It creates
+   four security groups attached to nothing, at no cost. Note the region you use.
+2. Scan that region:
+   ```powershell
+   .\scripts\dev.ps1 aws scan --account-id <id> --external-id <id> --regions <region>
+   ```
+3. Expected: `NET-001` for `cvs-test-ssh-open` and `cvs-test-all-traffic-open`,
+   `NET-002` for `cvs-test-rdp-open-ipv6` and `cvs-test-all-traffic-open`, nothing for
+   `cvs-test-ssh-restricted`, and `AWS-LOG-001` because a new account has no
+   multi-region trail. Remove the `--regions` option to scan every enabled region.
+4. Add `--json` to see the complete dataset that reports will use.
+5. When finished, **delete the `cvs-test-fixtures` stack**.
+
 ### Housekeeping
 
 - The access key is for development only. Rotate it (create new, delete old) every
   90 days, and delete it if it may have leaked. Gitleaks scans for committed keys.
 - The ExternalId on the command line appears in your shell history. That is acceptable
   for development; the web UI (later) will not need it on a command line.
+
+## What a scan collects
+
+| Data | API operations | Kept |
+|---|---|---|
+| Enabled regions | `ec2:DescribeRegions` | region names |
+| Security groups (each region in scope) | `ec2:DescribeSecurityGroups` | ID, name, VPC, tags, inbound rules (protocol, ports, source, description) |
+| CloudTrail trails | `cloudtrail:DescribeTrails`, `cloudtrail:GetTrailStatus` | name, home region, multi-region, logging, organization trail, log validation |
+
+Nothing else is collected: no egress rules, instance data, object contents or secrets.
+
+**Scope.** By default every region enabled in the account is assessed. Use `--regions`
+to match the scope agreed with the client. A requested region that is not enabled is
+reported as "not evaluated", never silently skipped.
+
+**Gaps.** A region or call that fails (e.g. access denied) is recorded as a collection
+gap and shown as "not evaluated". If a trail's logging status cannot be read (common
+for organization trails owned by another account), CloudTrail coverage is reported as
+not evaluated rather than guessed.
+
+**Safety order.** A scan confirms it is in the expected account before collecting
+anything, and any read-only guard violation stops the scan immediately.
 
 ## Troubleshooting
 

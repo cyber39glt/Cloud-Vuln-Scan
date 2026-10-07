@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  SANDBOX ONLY - deliberately insecure security groups for testing the scanner.
+  They are attached to nothing and cost nothing. NEVER deploy this in a client or
+  production account. Delete the stack when you have finished testing.
+
+# Each group documents the result the scanner should report for it.
+# Groups are created in the region's default VPC.
+
+Resources:
+  SshOpenToInternet:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: cvs-test-ssh-open
+      GroupDescription: "TEST - expect NET-001 FAIL: SSH open to 0.0.0.0/0"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  RdpOpenToInternetIpv6:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: cvs-test-rdp-open-ipv6
+      GroupDescription: "TEST - expect NET-002 FAIL: RDP open to ::/0"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIpv6: ::/0
+
+  AllTrafficOpen:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: cvs-test-all-traffic-open
+      GroupDescription: "TEST - expect NET-001 and NET-002 FAIL: all traffic open"
+      SecurityGroupIngress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  SshRestricted:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: cvs-test-ssh-restricted
+      GroupDescription: "TEST - expect NET-001 PASS: SSH only from a private range"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8

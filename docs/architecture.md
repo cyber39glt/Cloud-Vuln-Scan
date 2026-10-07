@@ -49,7 +49,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `core` | Configuration, logging, database engine | **M0 ✓** |
 | `api` | HTTP routes | Health only (**M0 ✓**) |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
-| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS connection **M2 ✓** ([guide](aws-connection.md)); collectors M3; Azure M6 |
+| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure M6 |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
@@ -89,6 +89,14 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### M3: AWS scanning
+
+- Collectors for security groups (all enabled regions, or a chosen scope) and CloudTrail
+  trails with logging status, normalized into the inventory
+- Failures recorded as collection gaps ("not evaluated"), never as passes
+- `scanning.scan_aws`: confirm account → collect → evaluate; `dev.ps1 aws scan`
+- Sandbox fixture template with deliberately weak security groups
+
 ### M2: AWS connector
 
 - Read-only guard: allowlist of AWS operations enforced before any request is built
@@ -121,7 +129,7 @@ The same container image runs everywhere; only environment variables differ
 | **M0** | **Project foundation** ✓ |
 | **M1** | **Domain model + rule engine on fixture data (no cloud)** ✓ |
 | **M2** | **AWS connector: AssumeRole + ExternalId, validation, read-only guard** ✓ |
-| M3 | AWS collectors + AWS rules; misconfigured test environment in our own sandbox |
+| **M3** | **AWS collectors + scan; sandbox test fixtures** ✓ |
 | M4 | Persistence: schema, migrations, stored scan runs |
 | M5 | JSON + CSV exports |
 | M6 | Azure connector: multi-tenant app, validation, read-only guard |
