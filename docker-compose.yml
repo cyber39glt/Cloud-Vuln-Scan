@@ -1,4 +1,4 @@
-# Local development environment: PostgreSQL + the API.
+# Local development environment: PostgreSQL + the API + the scan worker.
 # Use scripts/dev.ps1 rather than calling docker compose directly.
 #
 # Values like ${POSTGRES_USER} are read from the .env file next to this file.
@@ -56,6 +56,32 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  worker:
+    # Same image and code as the API, different command: it runs queued scans.
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+    volumes:
+      - ./backend:/app
+    # No ports: the worker only talks to the database and (read-only) to cloud APIs.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Docker sends SIGTERM on stop; give a running scan time to finish first.
+    stop_grace_period: 2m
+    healthcheck:
+      # Healthy while the worker loop keeps touching its marker file.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-alive') > 120)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
 
 volumes:
   pgdata:

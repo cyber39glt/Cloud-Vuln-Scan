@@ -111,7 +111,9 @@ def test_every_permission_has_a_probe_or_is_explicitly_skipped():
 # ------------------------------------------------------------------ session
 
 
-@pytest.mark.parametrize("account_id", ["12345", "12345678901a", "1234567890123", ""])
+@pytest.mark.parametrize(
+    "account_id", ["12345", "12345678901a", "1234567890123", "", "١٢٣٤٥٦٧٨٩٠١٢"]
+)
 def test_connection_rejects_invalid_account_ids(account_id):
     with pytest.raises(ValueError, match="12 digits"):
         connection(account_id)

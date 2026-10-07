@@ -8,6 +8,7 @@ any row that would link one client's data to another client's record.
     clients
       └─ cloud_connections   (AWS account + ExternalId, or Azure tenant + subscription)
            └─ assessments
+                ├─ scan_jobs (queue: requested → running → succeeded/failed; progress)
                 └─ scan_runs (frozen snapshot of the full AssessmentResult + SHA-256)
                      └─ findings (queryable copy of each finding, for dashboards)
 """
@@ -27,11 +28,12 @@ from sqlalchemy import (
     MetaData,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.enums import Category, Provider, Severity
+from app.domain.enums import Category, Provider, ScanStage, Severity
 
 # JSONB on PostgreSQL (indexable, compact); plain JSON elsewhere.
 JsonType = JSON().with_variant(JSONB(), "postgresql")
@@ -63,6 +65,16 @@ class AssessmentStatus(StrEnum):
 class ScanStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+ACTIVE_JOB_STATUSES = (JobStatus.QUEUED, JobStatus.RUNNING)
 
 
 class Base(DeclarativeBase):
@@ -161,6 +173,62 @@ class ScanRun(Base):
         ),
         UniqueConstraint("id", "client_id"),
         CheckConstraint("length(result_sha256) = 64", name="scan_result_hash_length"),
+    )
+
+
+class ScanJob(Base):
+    """A request to scan an assessment's cloud account, processed by the worker.
+
+    The queue is this table (ADR 0003): the worker claims the oldest queued job with
+    SELECT ... FOR UPDATE SKIP LOCKED, so two workers never run the same job. Error
+    messages are plain-language and safe to show; raw exception text is never stored.
+    """
+
+    __tablename__ = "scan_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID]
+    assessment_id: Mapped[uuid.UUID]
+    status: Mapped[JobStatus] = mapped_column(
+        _enum(JobStatus, "job_status"), default=JobStatus.QUEUED
+    )
+    stage: Mapped[ScanStage] = mapped_column(
+        _enum(ScanStage, "job_stage"), default=ScanStage.WAITING
+    )
+    # None = every enabled region (AWS) / the whole subscription (Azure).
+    regions: Mapped[list[str] | None] = mapped_column(JsonType)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Updated regularly while running; a stale heartbeat means the worker died.
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(String(1000))
+    scan_run_id: Mapped[uuid.UUID | None]
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["assessment_id", "client_id"],
+            ["assessments.id", "assessments.client_id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["scan_run_id", "client_id"],
+            ["scan_runs.id", "scan_runs.client_id"],
+            ondelete="CASCADE",
+        ),
+        # At most one queued or running scan per assessment: no duplicate parallel
+        # scans of the same client account.
+        Index(
+            "uq_scan_jobs_one_active_per_assessment",
+            "assessment_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+        Index("ix_scan_jobs_queue", "status", "requested_at"),
+        CheckConstraint(
+            "status <> 'succeeded' OR scan_run_id IS NOT NULL", name="succeeded_has_scan"
+        ),
     )
 
 

@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import Provider
@@ -59,6 +59,13 @@ def create_client(session: Session, name: str) -> Client:
 def list_clients(session: Session) -> list[Client]:
     # Unscoped by design: in M9 this becomes "clients assigned to the current user".
     return list(session.scalars(select(Client).order_by(Client.name)))
+
+
+def get_client(session: Session, client_id: uuid.UUID) -> Client:
+    client = session.get(Client, client_id)
+    if client is None:
+        raise NotFoundError("client not found")
+    return client
 
 
 def find_client(session: Session, name_or_id: str) -> Client:
@@ -148,7 +155,51 @@ def get_connection(
     return connection
 
 
+def list_connections(session: Session, client_id: uuid.UUID) -> list[CloudConnection]:
+    return list(
+        session.scalars(
+            select(CloudConnection)
+            .where(CloudConnection.client_id == client_id)
+            .order_by(CloudConnection.created_at)
+        )
+    )
+
+
+def get_connection_by_id(
+    session: Session, client_id: uuid.UUID, connection_id: uuid.UUID
+) -> CloudConnection:
+    connection = session.scalar(
+        select(CloudConnection).where(
+            CloudConnection.id == connection_id, CloudConnection.client_id == client_id
+        )
+    )
+    if connection is None:
+        raise NotFoundError("connection not found")
+    return connection
+
+
 # ------------------------------------------------------------------ assessments + scans
+
+
+def get_assessment(session: Session, client_id: uuid.UUID, assessment_id: uuid.UUID) -> Assessment:
+    assessment = session.scalar(
+        select(Assessment).where(Assessment.id == assessment_id, Assessment.client_id == client_id)
+    )
+    if assessment is None:
+        raise NotFoundError("assessment not found")
+    return assessment
+
+
+def find_assessment_by_name(
+    session: Session, client_id: uuid.UUID, connection_id: uuid.UUID, name: str
+) -> Assessment | None:
+    return session.scalar(
+        select(Assessment).where(
+            Assessment.client_id == client_id,
+            Assessment.connection_id == connection_id,
+            Assessment.name == name.strip(),
+        )
+    )
 
 
 def create_assessment(
@@ -164,13 +215,7 @@ def get_or_create_assessment(
     session: Session, client_id: uuid.UUID, connection_id: uuid.UUID, name: str
 ) -> Assessment:
     """Repeat scans with the same assessment name add scan runs to that assessment."""
-    assessment = session.scalar(
-        select(Assessment).where(
-            Assessment.client_id == client_id,
-            Assessment.connection_id == connection_id,
-            Assessment.name == name.strip(),
-        )
-    )
+    assessment = find_assessment_by_name(session, client_id, connection_id, name)
     return assessment or create_assessment(session, client_id, connection_id, name)
 
 
@@ -194,6 +239,17 @@ def list_scan_runs(
             .order_by(ScanRun.started_at.desc())
         )
     )
+
+
+def finding_counts(
+    session: Session, client_id: uuid.UUID, scan_run_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    rows = session.execute(
+        select(FindingRecord.scan_run_id, func.count())
+        .where(FindingRecord.client_id == client_id, FindingRecord.scan_run_id.in_(scan_run_ids))
+        .group_by(FindingRecord.scan_run_id)
+    )
+    return {scan_run_id: count for scan_run_id, count in rows}
 
 
 def save_scan_result(

@@ -7,6 +7,7 @@ How assessment data is stored. Decision record:
 clients                      one row per consultancy client
   └─ cloud_connections       an AWS account (or Azure subscription) + its ExternalId
        └─ assessments        a named engagement, e.g. "Q1 AWS review"
+            ├─ scan_jobs     scan requests queued for the worker, with progress
             └─ scan_runs     one completed scan: frozen dataset + SHA-256 hash
                  └─ findings one row per finding, for dashboards and filtering
 ```
@@ -16,6 +17,7 @@ clients                      one row per consultancy client
 | `clients` | `id`, `name` (unique, not blank) | |
 | `cloud_connections` | `client_id`, `provider`, `account_id`, `external_id` (unique) | One per client and account |
 | `assessments` | `client_id`, `connection_id`, `name`, `status` | `draft` → `in_review` (after a scan) → `finalized` (M12) |
+| `scan_jobs` | `client_id`, `assessment_id`, `status`, `stage`, `regions`, `heartbeat_at`, `error_code`, `error_message`, `scan_run_id` | `queued` → `running` → `succeeded` / `failed`; at most one queued or running per assessment ([ADR 0019](decisions/0019-api-worker-and-pre-auth-boundary.md)) |
 | `scan_runs` | `client_id`, `assessment_id`, `regions`, `engine_version`, `result` (JSON), `result_sha256` | **Immutable** |
 | `findings` | `client_id`, `scan_run_id`, `fingerprint`, `rule_id`, `severity`, `resource_*`, `data` (JSON) | **Immutable**; copied from `result` |
 

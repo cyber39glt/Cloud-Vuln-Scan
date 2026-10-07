@@ -55,3 +55,14 @@ class Framework(StrEnum):
     CIS_AZURE = "cis_azure"
     NIST_CSF = "nist_csf"
     SOC2 = "soc2"
+
+
+class ScanStage(StrEnum):
+    """Progress of a scan, in the order a scan goes through them."""
+
+    WAITING = "waiting"
+    CONNECTING = "connecting"  # obtaining read-only access, confirming the account
+    COLLECTING = "collecting"
+    EVALUATING = "evaluating"
+    SAVING = "saving"
+    DONE = "done"

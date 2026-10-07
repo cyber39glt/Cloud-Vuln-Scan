@@ -6,10 +6,11 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone R1, 19 security rules).**
-> AWS accounts and Azure subscriptions can be assessed from the command line, results
-> are stored per client and exported as JSON/CSV. User accounts, the web dashboard and
-> PDF reports are not built yet.
+> **Status: early development (milestone M8, API and background worker).**
+> AWS accounts and Azure subscriptions can be assessed with 19 rules from the command
+> line or through the development API (scans run in a background worker); results are
+> stored per client and exported as JSON/CSV. User accounts, the web dashboard and PDF
+> reports are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -76,11 +77,11 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 
 | Command | What it does |
 |---|---|
-| `up` | Build and start PostgreSQL + API, then apply database migrations |
+| `up` | Build and start PostgreSQL + API + scan worker, then apply database migrations |
 | `down` | Stop containers (database data is kept) |
 | `restart` | `down` then `up` |
 | `status` | Show containers and their health |
-| `logs` | Follow API logs (Ctrl+C to stop following) |
+| `logs` | Follow API and worker logs (Ctrl+C to stop following); `logs worker` for the worker only |
 | `test` | Run the test suite (extra args go to pytest, e.g. `test -k health`) |
 | `lint` | Ruff lint + format check |
 | `format` | Auto-fix and format code with Ruff |
@@ -130,6 +131,9 @@ All settings come from environment variables. Locally they are read from `.env`
 | `POSTGRES_DB` / `POSTGRES_USER` | `cloudscan` | Database name and user |
 | `POSTGRES_PASSWORD` | placeholder | Production refuses placeholder or short (<16 chars) values |
 | `DB_CONNECT_TIMEOUT_SECONDS` | `3` | Database connection timeout |
+| `API_ALLOWED_HOSTS` | `["localhost","127.0.0.1"]` | Host names the API answers to (JSON list) |
+| `WORKER_POLL_SECONDS` | `2` | How often an idle worker checks for queued scans |
+| `WORKER_STALE_AFTER_SECONDS` | `900` | A running scan silent for this long is marked interrupted |
 
 In production, secrets are supplied by the hosting platform's secret manager, never a file.
 
@@ -177,6 +181,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [Azure connection and sandbox testing](docs/azure-connection.md)
 - [Data model](docs/data-model.md)
 - [Report exports (JSON/CSV)](docs/exports.md)
+- [Using the API (development)](docs/api.md)
 - [Security policy](SECURITY.md)
 
 ## License

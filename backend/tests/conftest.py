@@ -1,17 +1,65 @@
+from pathlib import Path
+
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from moto import mock_aws
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.database import build_engine, get_engine
 from app.main import app
 
+ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
+
 
 @pytest.fixture
 def client():
-    with TestClient(app) as test_client:
+    # "localhost": the API only answers to allowed host names (DNS-rebinding defence).
+    with TestClient(app, base_url="http://localhost") as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+# ------------------------------------------------------------------ database
+#
+# A separate database `<POSTGRES_DB>_test` is created and migrated with Alembic, so
+# tests never touch development data.
+
+
+@pytest.fixture(scope="session")
+def test_engine():
+    settings = Settings(_env_file=None)
+    test_db = f"{settings.postgres_db}_test"
+    admin = create_engine(settings.database_url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db}" WITH (FORCE)'))
+        conn.execute(text(f'CREATE DATABASE "{test_db}"'))
+
+    engine = create_engine(settings.database_url.set(database=test_db))
+    config = Config(str(ALEMBIC_INI))
+    with engine.begin() as conn:
+        config.attributes["connection"] = conn
+        command.upgrade(config, "head")
+    yield engine
+
+    engine.dispose()
+    with admin.connect() as conn:
+        conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db}" WITH (FORCE)'))
+    admin.dispose()
+
+
+@pytest.fixture
+def db(test_engine):
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture
