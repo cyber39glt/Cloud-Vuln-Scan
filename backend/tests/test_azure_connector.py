@@ -2,12 +2,10 @@
 a fake credential: no Azure account, token or network is involved."""
 
 import re
-import time
 from pathlib import Path
 
 import pytest
 import responses
-from azure.core.credentials import AccessToken, AccessTokenInfo
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.core.rest import HttpRequest
 from azure.identity import ClientSecretCredential
@@ -28,41 +26,11 @@ from app.providers.azure.guard import (
 from app.providers.azure.session import AzureConnection, admin_consent_url, platform_credential
 from app.providers.azure.validation import PERMISSION_PROBES, validate_connection
 from app.rules.registry import ALL_RULES
+from tests.azure_fakes import SUB, TENANT, FakeCredential, arm_url, mock_subscription
 
-TENANT = "22222222-2222-2222-2222-222222222222"
-SUB = "11111111-1111-1111-1111-111111111111"
-ARM = "https://management.azure.com"
 CONNECTION = AzureConnection(TENANT, SUB)
-
-
-class FakeCredential:
-    """Stands in for an Entra ID token; nothing leaves the test process."""
-
-    def __init__(self, error: Exception | None = None) -> None:
-        self.error = error
-
-    def get_token(self, *_, **__):
-        if self.error:
-            raise self.error
-        return AccessToken("fake-token", int(time.time()) + 3600)
-
-    def get_token_info(self, *_, **__):
-        if self.error:
-            raise self.error
-        return AccessTokenInfo("fake-token", int(time.time()) + 3600)
-
-
-def _url(path: str) -> re.Pattern[str]:
-    return re.compile(re.escape(f"{ARM}{path}") + r"\?.*")
-
-
-def _subscription(rsps, tenant: str | None = TENANT, state: str | None = "Enabled") -> None:
-    body = {"subscriptionId": SUB, "displayName": "Sandbox"}
-    if tenant is not None:
-        body["tenantId"] = tenant
-    if state is not None:
-        body["state"] = state
-    rsps.get(_url(f"/subscriptions/{SUB}"), json=body)
+_url = arm_url
+_subscription = mock_subscription
 
 
 def _lists(rsps, nsg_status: int = 200) -> None:

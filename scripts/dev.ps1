@@ -93,6 +93,7 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   azure     Azure connection tools, e.g.:
               azure connect --client "Acme Ltd" --tenant-id <guid> --subscription-id <guid>
               azure validate --client "Acme Ltd" --subscription-id <guid>
+              azure scan --client "Acme Ltd" --subscription-id <guid> [--regions uksouth]
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready

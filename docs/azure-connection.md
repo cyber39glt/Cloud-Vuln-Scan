@@ -115,12 +115,46 @@ Expected:
 Connection is ready.
 ```
 
-Azure resource collection and scanning arrive in M7.
+### E. Plant test weaknesses and scan
+
+1. In your **sandbox only**: portal → search **Deploy a custom template** → **Build your own
+   template in the editor** → paste the contents of `infra/azure/sandbox-test-fixtures.json`
+   → **Save** → Resource group: **Create new** `cvs-test-rg` → **Review + create** → **Create**.
+   It creates four NSGs attached to nothing and one empty storage account (near-zero cost).
+2. Scan:
+   ```powershell
+   .\scripts\dev.ps1 azure scan --client "Azure Sandbox" --subscription-id <sub>
+   ```
+3. Expected: `NET-001` for `cvs-test-ssh-open` and `cvs-test-all-open`, `NET-002` for
+   `cvs-test-rdp-open` and `cvs-test-all-open`, nothing for `cvs-test-ssh-restricted`, and
+   `AZ-STO-001` for the `cvstest…` storage account. (A test in the repository proves the
+   template produces exactly these.) The scan is saved; export it with
+   `assessments export`.
+4. When finished, **delete the `cvs-test-rg` resource group**.
 
 ### Housekeeping
 - The client secret is for development only. Let it expire or delete it when not needed;
   production will use keyless workload identity federation (decided at deployment).
 - Gitleaks scans for committed secrets; never put the secret anywhere but `.env`.
+
+## What a scan collects
+
+| Data | API (GET, subscription-wide) | Kept |
+|---|---|---|
+| Network security groups | `Microsoft.Network/networkSecurityGroups` | ID, name, location, resource group, tags, **inbound custom rules** (protocol, ports, source, allow/deny, priority, name) |
+| Storage accounts | `Microsoft.Storage/storageAccounts` | ID, name, location, resource group, tags, `allowBlobPublicAccess` |
+
+Nothing else: no outbound rules, no keys, no blob contents.
+
+- **Scope:** Azure lists resources across the whole subscription. `--regions uksouth,ukwest`
+  keeps only resources in those locations; others are discarded, not stored.
+- **Gaps:** if a list call is denied, that resource type is "not evaluated" and other
+  types are still assessed.
+- **Safety order:** the scan confirms the subscription belongs to the expected tenant and
+  is enabled **before** collecting anything.
+- **Known limitation:** an allow rule is reported even if a higher-priority deny rule in
+  the same NSG blocks it (see the rule's limitations); Azure's built-in default rules are
+  not collected because they never allow internet inbound.
 
 ## Troubleshooting
 

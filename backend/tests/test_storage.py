@@ -390,3 +390,28 @@ def test_cli_azure_connect_prints_onboarding_steps(cli_db, capsys, monkeypatch):
     code = cli.main(["azure", "validate", "--client", "Acme Ltd", "--subscription-id", AZ_SUB])
     assert code == 1
     assert f"tenant {AZ_TENANT}" in capsys.readouterr().out
+
+
+@integration
+def test_cli_azure_scan_is_saved_and_exportable(cli_db, capsys, tmp_path, monkeypatch):
+    from app import cli
+    from tests.test_azure_collectors import _scan_with_fakes
+
+    monkeypatch.setattr(cli, "scan_azure", lambda c, s, regions=None: _scan_with_fakes(c, s))
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["clients", "add", "Acme Ltd"]) == 0
+    connect = ["azure", "connect", "--client", "Acme Ltd", "--tenant-id", AZ_TENANT]
+    assert cli.main([*connect, "--subscription-id", AZ_SUB]) == 0
+    capsys.readouterr()
+
+    scan = ["azure", "scan", "--client", "Acme Ltd", "--subscription-id", AZ_SUB.upper()]
+    assert cli.main(scan) == 0
+    out = capsys.readouterr().out
+    assert f'Saved to assessment "Azure assessment {AZ_SUB}"' in out
+    scan_id = out.split(" as scan ")[1].split(".")[0]
+
+    assert cli.main(["assessments", "list", "--client", "Acme Ltd"]) == 0
+    assert f"azure {AZ_SUB}  3 findings" in capsys.readouterr().out
+    assert cli.main(["assessments", "export", "--client", "Acme Ltd", "--scan", scan_id]) == 0
+    assert len(list((tmp_path / "exports").iterdir())) == 2
