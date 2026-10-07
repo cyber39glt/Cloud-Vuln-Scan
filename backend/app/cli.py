@@ -11,6 +11,10 @@ AWS
              [--regions eu-west-2,us-east-1] [--json]
         With --client the results are SAVED; with --external-id they are only printed.
     aws external-id                        generate an ExternalId (unsaved)
+Azure
+    azure connect --client "Acme Ltd" --tenant-id <guid> --subscription-id <guid>
+        register the client's subscription and print the onboarding steps
+    azure validate --subscription-id <guid> (--client "Acme Ltd" | --tenant-id <guid>)
 Assessments
     assessments list --client "Acme Ltd"
     assessments show --client "Acme Ltd" --scan <scan-id> [--json]
@@ -40,6 +44,9 @@ from app.domain.findings import AssessmentResult
 from app.providers.aws.errors import describe_aws_error
 from app.providers.aws.session import AwsConnection, generate_external_id
 from app.providers.aws.validation import validate_connection
+from app.providers.azure import validation as azure_validation
+from app.providers.azure.session import AzureConnection, admin_consent_url
+from app.providers.common import ValidationReport
 from app.reporting.exports import to_csv, to_json
 from app.reporting.report import report_for_scan
 from app.scanning import WrongAccountError, scan_aws
@@ -167,15 +174,89 @@ def _aws_connect(args: argparse.Namespace) -> int:
     return _db(work)
 
 
-def _aws_validate(args: argparse.Namespace) -> int:
-    connection = _aws_connection(args)
-    print(f"Validating AWS account {connection.account_id} via {connection.role_arn}\n")
-    report = validate_connection(connection, get_settings())
+def _print_report(report: ValidationReport) -> int:
     for check in report.checks:
         detail = f"  {check.detail}" if check.detail else ""
         print(f"{_MARKERS[check.status]} {check.name}{detail}")
     print("\nConnection is ready." if report.ok else "\nConnection is NOT ready.")
     return 0 if report.ok else 1
+
+
+def _aws_validate(args: argparse.Namespace) -> int:
+    connection = _aws_connection(args)
+    print(f"Validating AWS account {connection.account_id} via {connection.role_arn}\n")
+    return _print_report(validate_connection(connection, get_settings()))
+
+
+# ------------------------------------------------------------------ Azure
+
+
+def _azure_connect(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    try:
+        AzureConnection(args.tenant_id, args.subscription_id)
+    except ValueError as exc:
+        raise CliError(f"Invalid input: {exc}") from exc
+
+    def work(db: Session) -> int:
+        client = repo.find_client(db, args.client)
+        try:
+            connection = repo.get_or_create_azure_connection(
+                db, client.id, args.tenant_id, args.subscription_id
+            )
+        except ValueError as exc:
+            raise CliError(str(exc).capitalize() + ".") from exc
+        app_id = settings.azure_client_id or "<AZURE_CLIENT_ID not configured>"
+        scope = f"/subscriptions/{connection.account_id}"
+        print(f"Client      : {client.name}")
+        print(f"Tenant      : {connection.tenant_id}")
+        print(f"Subscription: {connection.account_id}")
+        print("\nClient onboarding (done by the client's administrator):")
+        print("1. Grant consent (creates the app in their tenant; gives no access by itself):")
+        print(f"   {admin_consent_url(connection.tenant_id, app_id)}")
+        print("2. Give the app read-only roles on the subscription (Azure Cloud Shell):")
+        for role in ("Reader", "Security Reader"):
+            print(
+                f'   az role assignment create --assignee {app_id} --role "{role}" --scope {scope}'
+            )
+        print(
+            f'\nThen run: azure validate --client "{client.name}" '
+            f"--subscription-id {connection.account_id}"
+        )
+        return 0
+
+    return _db(work)
+
+
+def _azure_validate(args: argparse.Namespace) -> int:
+    tenant_id = args.tenant_id
+    if args.client:
+
+        def work(db: Session) -> int:
+            nonlocal tenant_id
+            client = repo.find_client(db, args.client)
+            try:
+                tenant_id = repo.get_connection(
+                    db, client.id, Provider.AZURE, args.subscription_id.lower()
+                ).tenant_id
+            except repo.NotFoundError as exc:
+                raise CliError(
+                    "This client has no connection for that subscription yet. Run: azure "
+                    f'connect --client "{client.name}" --tenant-id <guid> '
+                    f"--subscription-id {args.subscription_id}"
+                ) from exc
+            return 0
+
+        _db(work)
+    try:
+        connection = AzureConnection(tenant_id or "", args.subscription_id)
+    except ValueError as exc:
+        raise CliError(f"Invalid input: {exc}") from exc
+    print(
+        f"Validating Azure subscription {connection.subscription_id} "
+        f"(tenant {connection.tenant_id})\n"
+    )
+    return _print_report(azure_validation.validate_connection(connection, get_settings()))
 
 
 def _aws_scan(args: argparse.Namespace) -> int:
@@ -342,6 +423,21 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--regions", help="comma-separated regions (default: all)")
             command.add_argument("--json", action="store_true", help="print the full dataset")
         command.set_defaults(handler=handler)
+
+    azure = groups.add_parser("azure", help="Azure connection tools").add_subparsers(
+        dest="command", required=True
+    )
+    azure_connect = azure.add_parser("connect", help="register a client's Azure subscription")
+    azure_connect.add_argument("--client", required=True, help="client name or ID")
+    azure_connect.add_argument("--tenant-id", required=True, help="client's tenant (directory) ID")
+    azure_connect.add_argument("--subscription-id", required=True, help="subscription ID")
+    azure_connect.set_defaults(handler=_azure_connect)
+    azure_check = azure.add_parser("validate", help="validate a client's Azure connection")
+    azure_check.add_argument("--subscription-id", required=True, help="subscription ID")
+    azure_source = azure_check.add_mutually_exclusive_group(required=True)
+    azure_source.add_argument("--client", help="client name or ID (uses the saved connection)")
+    azure_source.add_argument("--tenant-id", help="tenant ID, for one-off use")
+    azure_check.set_defaults(handler=_azure_validate)
 
     assessments = groups.add_parser("assessments", help="view saved assessments").add_subparsers(
         dest="command", required=True

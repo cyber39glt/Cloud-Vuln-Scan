@@ -19,7 +19,9 @@ Read-only behaviour is enforced in two independent layers (see
 2. **Application-side guard:** the platform allows only an explicit list of read
    operations and blocks every other cloud API call before it is sent, even if the
    granted credentials would allow more. Implemented for AWS in
-   `backend/app/providers/aws/guard.py` (see [docs/aws-connection.md](docs/aws-connection.md)).
+   `backend/app/providers/aws/guard.py` (see [docs/aws-connection.md](docs/aws-connection.md))
+   and for Azure in `backend/app/providers/azure/guard.py` (see
+   [docs/azure-connection.md](docs/azure-connection.md)).
 
 A contribution that weakens either layer will not be accepted.
 

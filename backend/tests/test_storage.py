@@ -330,3 +330,63 @@ def test_demo_save_stores_clearly_labelled_sample_data(cli_db, capsys, monkeypat
     [assessment] = repo.list_assessments(cli_db, client.id)
     assert assessment.name == demo.DEMO_ASSESSMENT_NAME
     assert len(repo.list_scan_runs(cli_db, client.id, assessment.id)) == 1
+
+
+# ------------------------------------------------------------------ Azure connections
+
+AZ_TENANT = "22222222-2222-2222-2222-222222222222"
+AZ_SUB = "11111111-1111-1111-1111-111111111111"
+
+
+@integration
+def test_azure_connection_stores_tenant_and_no_secret(db):
+    client = repo.create_client(db, "Acme Ltd")
+    connection = repo.get_or_create_azure_connection(db, client.id, AZ_TENANT.upper(), AZ_SUB)
+
+    assert connection.provider.value == "azure"
+    assert (connection.tenant_id, connection.account_id) == (AZ_TENANT, AZ_SUB)  # normalized
+    assert connection.external_id is None
+    again = repo.get_or_create_azure_connection(db, client.id, AZ_TENANT, AZ_SUB.upper())
+    assert again.id == connection.id
+
+    with pytest.raises(ValueError, match="different tenant"):
+        repo.get_or_create_azure_connection(
+            db, client.id, "99999999-9999-9999-9999-999999999999", AZ_SUB
+        )
+
+
+@integration
+def test_database_requires_a_tenant_for_azure_connections(db):
+    from app.domain.enums import Provider
+    from app.storage.models import CloudConnection
+
+    client = repo.create_client(db, "Acme Ltd")
+    db.add(CloudConnection(client_id=client.id, provider=Provider.AZURE, account_id=AZ_SUB))
+    with pytest.raises(IntegrityError, match="azure_requires_tenant"):
+        db.flush()
+
+
+@integration
+def test_cli_azure_connect_prints_onboarding_steps(cli_db, capsys, monkeypatch):
+    from app import cli
+    from app.core.config import Settings
+
+    monkeypatch.setattr(
+        cli,
+        "get_settings",
+        lambda: Settings(_env_file=None, azure_client_id="33333333-3333-3333-3333-333333333333"),
+    )
+    assert cli.main(["clients", "add", "Acme Ltd"]) == 0
+    args = ["azure", "connect", "--client", "Acme Ltd", "--tenant-id", AZ_TENANT]
+    assert cli.main([*args, "--subscription-id", AZ_SUB]) == 0
+    out = capsys.readouterr().out
+
+    assert f"login.microsoftonline.com/{AZ_TENANT}/adminconsent?client_id=3333" in out
+    assert f'--role "Reader" --scope /subscriptions/{AZ_SUB}' in out
+    assert '--role "Security Reader"' in out
+
+    # validate --client finds the stored tenant; without a platform identity it stops there.
+    monkeypatch.setattr(cli, "get_settings", lambda: Settings(_env_file=None))
+    code = cli.main(["azure", "validate", "--client", "Acme Ltd", "--subscription-id", AZ_SUB])
+    assert code == 1
+    assert f"tenant {AZ_TENANT}" in capsys.readouterr().out
