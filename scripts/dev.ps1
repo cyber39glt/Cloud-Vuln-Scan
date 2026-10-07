@@ -77,10 +77,13 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   check     lint + test + secrets (what CI runs)
   build     Build the production image ($ProdImage)
   migrate   Apply database migrations (also done automatically by 'up')
-  demo      Run the rule engine on sample data (add -json for the full dataset)
+  demo      Run the rule engine on sample data (add -json for the full dataset,
+            or -save "Demo Client" to store it and try listing/exports)
   clients   Manage clients, e.g.:  clients add "Acme Ltd"   |   clients list
   assessments  Saved results, e.g.:  assessments list --client "Acme Ltd"
                                      assessments show --client "Acme Ltd" --scan <id>
+                                     assessments export --client "Acme Ltd" --scan <id>
+            (exports are written to backend\exports\ and contain client data)
   aws       AWS connection and assessment tools, e.g.:
               aws external-id
               aws validate --account-id 123456789012 --external-id <id>
@@ -157,8 +160,8 @@ try {
         }
         "demo" {
             Write-Step "Rule engine demo on sample AWS + Azure data (no cloud access)"
-            $demoArgs = @($ExtraArgs | ForEach-Object { if ($_ -eq "-json") { "--json" } else { $_ } })
-            Invoke-Compose (@("run", "--rm", "--no-deps", "api", "python", "-m", "app.demo") + $demoArgs)
+            $demoArgs = @($ExtraArgs | ForEach-Object { if ($_ -in "-json", "-save") { "-$_" } else { $_ } })
+            Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.demo") + $demoArgs)
         }
         "check" {
             Invoke-Lint

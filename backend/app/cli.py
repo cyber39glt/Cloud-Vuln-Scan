@@ -14,13 +14,19 @@ AWS
 Assessments
     assessments list --client "Acme Ltd"
     assessments show --client "Acme Ltd" --scan <scan-id> [--json]
+    assessments export --client "Acme Ltd" --scan <scan-id> [--format json|csv|all]
+        write report files to the exports/ folder (git-ignored: they contain client data)
 """
 
 import argparse
 import json
+import os
+import re
 import sys
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -34,6 +40,8 @@ from app.domain.findings import AssessmentResult
 from app.providers.aws.errors import describe_aws_error
 from app.providers.aws.session import AwsConnection, generate_external_id
 from app.providers.aws.validation import validate_connection
+from app.reporting.exports import to_csv, to_json
+from app.reporting.report import report_for_scan
 from app.scanning import WrongAccountError, scan_aws
 from app.storage import repository as repo
 
@@ -232,11 +240,15 @@ def _assessments_list(args: argparse.Namespace) -> int:
     return _db(work)
 
 
-def _assessments_show(args: argparse.Namespace) -> int:
+def _scan_id(args: argparse.Namespace) -> uuid.UUID:
     try:
-        scan_id = uuid.UUID(args.scan)
+        return uuid.UUID(args.scan)
     except ValueError as exc:
         raise CliError("--scan must be a scan ID (see: assessments list).") from exc
+
+
+def _assessments_show(args: argparse.Namespace) -> int:
+    scan_id = _scan_id(args)
 
     def work(db: Session) -> int:
         client = repo.find_client(db, args.client)
@@ -245,6 +257,46 @@ def _assessments_show(args: argparse.Namespace) -> int:
         except repo.IntegrityViolation as exc:
             raise CliError("This stored scan FAILED its integrity check (hash mismatch).") from exc
         _print_result(result, args.json)
+        return 0
+
+    return _db(work)
+
+
+# Relative to the working directory: backend/exports on your computer (git-ignored).
+EXPORT_DIR = Path("exports")
+
+
+def _write_private_file(path: Path, content: bytes) -> None:
+    """Create a new file readable only by its owner; never overwrite an existing one."""
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as file:
+        file.write(content)
+
+
+def _assessments_export(args: argparse.Namespace) -> int:
+    scan_id = _scan_id(args)
+    settings = get_settings()
+
+    def work(db: Session) -> int:
+        client = repo.find_client(db, args.client)
+        try:
+            report = report_for_scan(db, client.id, scan_id, settings.consultancy_name)
+        except repo.IntegrityViolation as exc:
+            raise CliError("This stored scan FAILED its integrity check (hash mismatch).") from exc
+
+        # File names are built only from safe characters: client names are free text.
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", client.name).strip("-").lower()[:40] or "client"
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        base = f"{slug}_{str(scan_id)[:8]}_{stamp}"
+        renderers = {"json": to_json, "csv": to_csv}
+        formats = renderers if args.format == "all" else {args.format: renderers[args.format]}
+
+        EXPORT_DIR.mkdir(exist_ok=True)
+        for extension, render in formats.items():
+            path = EXPORT_DIR / f"{base}.{extension}"
+            _write_private_file(path, render(report))
+            print(f"Written: {path.as_posix()}")
+        print("These files contain client data: store and share them accordingly.")
         return 0
 
     return _db(work)
@@ -302,6 +354,11 @@ def _parser() -> argparse.ArgumentParser:
     show.add_argument("--scan", required=True, help="scan ID")
     show.add_argument("--json", action="store_true", help="print the full dataset")
     show.set_defaults(handler=_assessments_show)
+    export = assessments.add_parser("export", help="write JSON/CSV report files")
+    export.add_argument("--client", required=True, help="client name or ID")
+    export.add_argument("--scan", required=True, help="scan ID")
+    export.add_argument("--format", choices=("json", "csv", "all"), default="all")
+    export.set_defaults(handler=_assessments_export)
     return parser
 
 

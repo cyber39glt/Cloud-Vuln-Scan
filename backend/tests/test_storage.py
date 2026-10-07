@@ -259,3 +259,74 @@ def test_cli_scan_with_client_requires_a_connection(cli_db, aws, capsys):
     code = main(["aws", "scan", "--client", "Acme Ltd", "--account-id", "123456789012"])
     assert code == 1
     assert "aws connect" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ exports from storage
+
+
+@integration
+def test_cli_exports_a_stored_scan_as_json_and_csv(cli_db, capsys, tmp_path, monkeypatch):
+    import csv
+    import io
+    import stat
+
+    from app.cli import main
+    from app.reporting.report import AssessmentReport
+
+    client, _, _, scan, result = _client_with_scan(cli_db, "Acme Ltd / EMEA")
+    monkeypatch.chdir(tmp_path)  # exports/ is created under the working directory
+
+    assert main(["assessments", "export", "--client", client.name, "--scan", str(scan.id)]) == 0
+    out = capsys.readouterr().out
+    assert "contain client data" in out
+
+    files = sorted((tmp_path / "exports").iterdir())
+    assert [f.suffix for f in files] == [".csv", ".json"]
+    assert all(f.name.startswith("acme-ltd-emea_") for f in files)  # safe file names
+    assert all(stat.S_IMODE(f.stat().st_mode) == 0o600 for f in files)  # owner-only
+
+    report = AssessmentReport.model_validate_json(files[1].read_bytes())
+    assert report.source.scan_id == scan.id
+    assert report.source.scan_sha256 == scan.result_sha256
+    assert [f.finding_id for f in report.findings] == [f.finding_id for f in result.findings]
+    rows = list(csv.DictReader(io.StringIO(files[0].read_bytes().decode("utf-8-sig"))))
+    assert len(rows) == len(result.findings)
+
+
+@integration
+def test_export_is_client_scoped_and_integrity_checked(cli_db, capsys, tmp_path, monkeypatch):
+    from app.cli import main
+
+    _, _, _, scan, _ = _client_with_scan(cli_db, "Acme Ltd")
+    repo.create_client(cli_db, "Globex Corp")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["assessments", "export", "--client", "Globex Corp", "--scan", str(scan.id)]) == 1
+    assert "Scan not found." in capsys.readouterr().out
+    assert not (tmp_path / "exports").exists()  # nothing written
+
+    cli_db.execute(text("ALTER TABLE scan_runs DISABLE TRIGGER scan_runs_immutable"))
+    cli_db.execute(
+        text("UPDATE scan_runs SET result = jsonb_set(result, '{findings}', '[]') WHERE id = :id"),
+        {"id": scan.id},
+    )
+    assert main(["assessments", "export", "--client", "Acme Ltd", "--scan", str(scan.id)]) == 1
+    assert "integrity check" in capsys.readouterr().out
+
+
+@integration
+def test_demo_save_stores_clearly_labelled_sample_data(cli_db, capsys, monkeypatch):
+    from sqlalchemy.orm import sessionmaker
+
+    from app import demo
+
+    factory = sessionmaker(bind=cli_db.connection(), join_transaction_mode="create_savepoint")
+    monkeypatch.setattr(demo, "get_sessionmaker", lambda: factory)
+
+    demo.main(["--save", "Demo Client"])
+    assert "Sample data saved" in capsys.readouterr().out
+
+    client = repo.find_client(cli_db, "Demo Client")
+    [assessment] = repo.list_assessments(cli_db, client.id)
+    assert assessment.name == demo.DEMO_ASSESSMENT_NAME
+    assert len(repo.list_scan_runs(cli_db, client.id, assessment.id)) == 1
