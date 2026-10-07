@@ -30,6 +30,12 @@ jobs:
       - name: Build images and start PostgreSQL + API
         run: docker compose up --build --detach --wait
 
+      - name: Apply database migrations to a fresh database
+        run: docker compose run --rm api alembic upgrade head
+
+      - name: Database models match the migrations (no forgotten migration)
+        run: docker compose run --rm api alembic check
+
       - name: Ruff lint
         run: docker compose run --rm --no-deps api ruff check --output-format=github .
 

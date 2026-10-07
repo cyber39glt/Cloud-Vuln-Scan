@@ -249,7 +249,7 @@ def test_cli_generates_external_id(capsys):
 
 
 def test_cli_rejects_invalid_input(capsys):
-    assert cli_main(["aws", "validate", "--account-id", "123", "--external-id", "ab"]) == 2
+    assert cli_main(["aws", "validate", "--account-id", "123", "--external-id", "ab"]) == 1
     assert "12 digits" in capsys.readouterr().out
 
 

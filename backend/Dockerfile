@@ -38,6 +38,8 @@ FROM base AS prod
 RUN uv sync --frozen --no-dev --no-install-project && pip uninstall -y uv
 
 COPY app ./app
+COPY alembic.ini ./
+COPY migrations ./migrations
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

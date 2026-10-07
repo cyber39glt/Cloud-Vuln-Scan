@@ -14,7 +14,8 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
-                 "secrets", "check", "build", "reset", "demo", "aws")]
+                 "secrets", "check", "build", "reset", "demo", "aws", "migrate",
+                 "clients", "assessments")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -64,7 +65,7 @@ function Show-Help {
     Write-Host @"
 Usage: .\scripts\dev.ps1 <command> [extra args]
 
-  up        Build and start PostgreSQL + API in the background
+  up        Build and start PostgreSQL + API, then apply database migrations
   down      Stop the containers (database data is kept)
   restart   down, then up
   status    Show running containers and their health
@@ -75,16 +76,27 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   secrets   Scan the git history for committed secrets with Gitleaks
   check     lint + test + secrets (what CI runs)
   build     Build the production image ($ProdImage)
+  migrate   Apply database migrations (also done automatically by 'up')
   demo      Run the rule engine on sample data (add -json for the full dataset)
+  clients   Manage clients, e.g.:  clients add "Acme Ltd"   |   clients list
+  assessments  Saved results, e.g.:  assessments list --client "Acme Ltd"
+                                     assessments show --client "Acme Ltd" --scan <id>
   aws       AWS connection and assessment tools, e.g.:
               aws external-id
               aws validate --account-id 123456789012 --external-id <id>
-              aws scan --account-id 123456789012 --external-id <id> [--regions eu-west-2] [--json]
+              aws connect --client "Acme Ltd" --account-id 123456789012
+              aws scan --client "Acme Ltd" --account-id 123456789012 [--regions eu-west-2]
+              (use --external-id instead of --client for an unsaved one-off scan)
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
              http://localhost:8000/docs     (interactive API docs, development only)
 "@
+}
+
+function Invoke-Migrations {
+    Write-Step "Applying database migrations"
+    Invoke-Compose @("run", "--rm", "api", "alembic", "upgrade", "head")
 }
 
 function Invoke-Lint {
@@ -116,10 +128,19 @@ try {
         "up" {
             Write-Step "Starting containers"
             Invoke-Compose @("up", "--build", "--detach", "--wait")
+            Invoke-Migrations
             Write-Host "`nAPI running at http://localhost:8000  (try /health and /health/ready)" -ForegroundColor Green
         }
         "down"    { Write-Step "Stopping containers"; Invoke-Compose @("down") }
-        "restart" { Invoke-Compose @("down"); Invoke-Compose @("up", "--build", "--detach", "--wait") }
+        "restart" {
+            Invoke-Compose @("down")
+            Invoke-Compose @("up", "--build", "--detach", "--wait")
+            Invoke-Migrations
+        }
+        "migrate" { Invoke-Migrations }
+        { $_ -in "clients", "assessments" } {
+            Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.cli", $Command) + $ExtraArgs)
+        }
         "status"  { Invoke-Compose @("ps") }
         "logs"    { Invoke-Compose @("logs", "--follow", "api") }
         "test"    { Invoke-Tests }
@@ -132,7 +153,7 @@ try {
         "secrets" { Invoke-SecretScan }
         "aws" {
             # Uses the platform AWS identity from .env (see docs/aws-connection.md).
-            Invoke-Compose (@("run", "--rm", "--no-deps", "api", "python", "-m", "app.cli", "aws") + $ExtraArgs)
+            Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.cli", "aws") + $ExtraArgs)
         }
         "demo" {
             Write-Step "Rule engine demo on sample AWS + Azure data (no cloud access)"

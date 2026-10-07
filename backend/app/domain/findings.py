@@ -115,6 +115,7 @@ class AssessmentResult(_Frozen):
     provider: Provider
     account_id: str
     engine_version: str
+    regions: tuple[str, ...] = ()  # assessment scope (regions collected)
     started_at: datetime
     completed_at: datetime
     rules_run: tuple[RuleRun, ...]

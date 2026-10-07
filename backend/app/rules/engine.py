@@ -75,6 +75,7 @@ class RuleEngine:
             provider=inventory.provider,
             account_id=inventory.account_id,
             engine_version=ENGINE_VERSION,
+            regions=inventory.regions,
             started_at=started_at,
             completed_at=self._clock(),
             rules_run=tuple(
