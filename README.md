@@ -6,9 +6,9 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M3, AWS scanning).**
-> AWS accounts can be assessed from the command line. Azure, storage of results,
-> user accounts, the dashboard and reports are not built yet.
+> **Status: early development (milestone M4, persistence).**
+> AWS accounts can be assessed from the command line and results are stored per
+> client. Azure, user accounts, the dashboard and reports are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -75,7 +75,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 
 | Command | What it does |
 |---|---|
-| `up` | Build and start PostgreSQL + API in the background |
+| `up` | Build and start PostgreSQL + API, then apply database migrations |
 | `down` | Stop containers (database data is kept) |
 | `restart` | `down` then `up` |
 | `status` | Show containers and their health |
@@ -89,7 +89,12 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset) |
 | `aws external-id` | Generate an ExternalId for a client connection |
 | `aws validate --account-id <id> --external-id <id>` | Check an AWS connection works and is read-only ([guide](docs/aws-connection.md)) |
-| `aws scan --account-id <id> --external-id <id> [--regions r1,r2] [--json]` | Run a read-only AWS assessment and print the findings |
+| `clients add "Acme Ltd"` / `clients list` | Register and list clients |
+| `aws connect --client "Acme Ltd" --account-id <id>` | Create the client's AWS connection and ExternalId |
+| `aws scan --client "Acme Ltd" --account-id <id> [--assessment NAME] [--regions r1,r2] [--json]` | Run a read-only AWS assessment and **save** it |
+| `aws scan --account-id <id> --external-id <id>` | One-off scan, printed only (not saved) |
+| `assessments list --client "Acme Ltd"` / `assessments show --client ... --scan <id>` | View saved assessments and scans |
+| `migrate` | Apply database migrations |
 | `reset` | Stop everything **and delete the local database** (asks first) |
 
 Code changes in `backend/` are picked up automatically while the app is running.
@@ -137,7 +142,9 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   │   ├── domain/          Inventory, findings and evidence models
 │   │   ├── rules/           Security rules and the rule engine
 │   │   ├── frameworks/      CIS / NIST CSF / SOC 2 mappings
-│   │   └── providers/aws/   AWS connector: read-only guard, AssumeRole, validation
+│   │   ├── providers/aws/   AWS connector: read-only guard, AssumeRole, collectors
+│   │   └── storage/         Database models and client-scoped data access
+│   ├── migrations/          Alembic database migrations
 │   ├── tests/               pytest tests
 │   ├── Dockerfile           dev and prod container images
 │   ├── pyproject.toml       Dependencies and tool settings
@@ -158,6 +165,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [Architecture decisions](docs/decisions/)
 - [Writing a security rule](docs/rules.md)
 - [AWS connection and sandbox testing](docs/aws-connection.md)
+- [Data model](docs/data-model.md)
 - [Security policy](SECURITY.md)
 
 ## License

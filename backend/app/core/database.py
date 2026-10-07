@@ -7,6 +7,7 @@ arrive in a later milestone and will build on this engine.
 from functools import lru_cache
 
 from sqlalchemy import URL, Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 
@@ -26,6 +27,13 @@ def get_engine() -> Engine:
     """One shared connection pool per process, created on first use."""
     settings = get_settings()
     return build_engine(settings.database_url, settings.db_connect_timeout_seconds)
+
+
+@lru_cache
+def get_sessionmaker() -> sessionmaker[Session]:
+    """Factory for ORM sessions. expire_on_commit=False keeps loaded objects usable
+    after a commit (e.g. to print an ID that was just saved)."""
+    return sessionmaker(bind=get_engine(), expire_on_commit=False)
 
 
 def check_database(engine: Engine) -> None:

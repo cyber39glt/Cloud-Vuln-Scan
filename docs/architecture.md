@@ -53,6 +53,8 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
+| `storage` | Database models, migrations, client-scoped repository ([data model](data-model.md)) | **M4 ✓** |
+| `scanning` | One safe sequence: connect → verify account → collect → evaluate | **M3 ✓** |
 | `reporting` | One dataset → JSON, CSV, PDF | Planned |
 
 ## Assessment data flow
@@ -88,6 +90,13 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M4: persistence
+
+- PostgreSQL schema via Alembic: clients, connections, assessments, scan runs, findings
+- Client isolation enforced by composite foreign keys and client-scoped repository
+- Frozen scan snapshots with SHA-256 verification; database trigger blocks edits
+- CLI: `clients`, `aws connect`, saved `aws scan --client`, `assessments list/show`
 
 ### M3: AWS scanning
 
@@ -130,7 +139,7 @@ The same container image runs everywhere; only environment variables differ
 | **M1** | **Domain model + rule engine on fixture data (no cloud)** ✓ |
 | **M2** | **AWS connector: AssumeRole + ExternalId, validation, read-only guard** ✓ |
 | **M3** | **AWS collectors + scan; sandbox test fixtures** ✓ |
-| M4 | Persistence: schema, migrations, stored scan runs |
+| **M4** | **Persistence: schema, migrations, stored scan runs** ✓ |
 | M5 | JSON + CSV exports |
 | M6 | Azure connector: multi-tenant app, validation, read-only guard |
 | M7 | Azure collectors + rules (ARM + minimal Graph) |
