@@ -1,14 +1,13 @@
-"""The data API (M8) against the test database: behaviour, client isolation and the
-HTTP-level protections. No cloud is contacted: scans are only queued here."""
+"""The data API against the test database, logged in as an administrator: behaviour,
+client isolation and the HTTP-level protections. No cloud is contacted: scans are only
+queued here. Authentication and roles are tested in test_auth.py."""
 
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
 
-from app.api import deps
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 from app.main import app
 from app.rules.engine import RuleEngine
 from app.sample_data import sample_aws_inventory
@@ -18,18 +17,6 @@ pytestmark = pytest.mark.integration
 
 TENANT = "22222222-2222-2222-2222-222222222222"
 SUB = "11111111-1111-1111-1111-111111111111"
-
-
-@pytest.fixture
-def api(db, monkeypatch):
-    """API client whose requests run inside the test transaction (rolled back)."""
-    factory = sessionmaker(
-        bind=db.connection(), join_transaction_mode="create_savepoint", expire_on_commit=False
-    )
-    monkeypatch.setattr(deps, "get_sessionmaker", lambda: factory)
-    with TestClient(app, base_url="http://localhost") as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
 
 
 def _client(api, name="Acme Ltd") -> str:
@@ -225,16 +212,9 @@ def test_security_headers(api):
     assert "default-src 'none'" in response.headers["content-security-policy"]
 
 
-def test_data_api_is_disabled_in_production(api):
-    """No user accounts until M9: in production every data request is refused."""
-    production = Settings(
-        _env_file=None,
-        app_env="production",
-        postgres_password="x" * 32,  # gitleaks:allow
-    )
-    app.dependency_overrides[get_settings] = lambda: production
-    for method, url in (("get", "/api/v1/clients"), ("get", f"/api/v1/clients/{uuid.uuid4()}")):
-        response = getattr(api, method)(url)
-        assert response.status_code == 503, url
-    assert api.post("/api/v1/clients", json={"name": "x"}).status_code == 503
-    assert api.get("/health").status_code == 200  # health stays available
+def test_data_api_requires_login(http):
+    """Without a session cookie every data request is refused (401)."""
+    for url in ("/api/v1/clients", f"/api/v1/clients/{uuid.uuid4()}"):
+        assert http.get(url).status_code == 401, url
+    assert http.post("/api/v1/clients", json={"name": "x"}).status_code == 401
+    assert http.get("/health").status_code == 200  # health stays available

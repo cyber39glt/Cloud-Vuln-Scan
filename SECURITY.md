@@ -56,11 +56,26 @@ The project is pre-release. Only the latest commit on the default branch is supp
 Treat it as compromised even if the commit is removed: **rotate it first**, then
 remove it from history. Deleting the file is not enough; it remains in git history.
 
+## Access control (implemented)
+
+| Control | How |
+|---|---|
+| Passwords | Argon2id; 12+ characters; temporary passwords must be changed at first use |
+| MFA | Authenticator app (TOTP) mandatory for every user, no SMS; secrets encrypted at rest; codes single-use; hashed one-time recovery codes |
+| Sessions | Server-side; random token in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie, stored hashed; 30-minute idle / 12-hour absolute limit; ended on logout, password or MFA change, deactivation |
+| Brute force | Account lockout after 5 failures; per-IP login rate limit; identical responses for unknown and wrong accounts |
+| CSRF / browser attacks | `SameSite=Strict`, JSON-only POSTs, foreign-Origin refusal, host allowlist |
+| Authorization | Admin / Consultant roles; Consultants see only assigned clients (others are "not found"); enforced by one shared dependency on every endpoint, with a test covering every route |
+| Audit | Append-only log (database refuses changes) of authentication, account changes, data access, scans and exports; never contains secrets |
+
+Details: [ADR 0009](docs/decisions/0009-authentication-and-authorization.md),
+[ADR 0020](docs/decisions/0020-authentication-implementation.md),
+[docs/users.md](docs/users.md).
+
 ## Planned controls (later milestones)
 
-Argon2id password hashing; mandatory TOTP MFA for all users; server-side sessions;
-CSRF protection; login rate limiting; role-based and assigned-client authorization
-enforced on every endpoint; append-only audit logging; temporary cloud credentials
-only (AWS `AssumeRole` with ExternalId, Azure multi-tenant app with no stored client
-secrets). See [ADR 0009](docs/decisions/0009-authentication-and-authorization.md)
-and [ADR 0005](docs/decisions/0005-cloud-access-model.md).
+Shared (multi-instance) rate limiting and trusted-proxy client addresses with hosting
+(M14); SSO through an external identity provider; a formal threat model and security
+review (M13). Cloud access uses temporary credentials only (AWS `AssumeRole` with
+ExternalId, Azure multi-tenant app with no stored client secrets), see
+[ADR 0005](docs/decisions/0005-cloud-access-model.md).

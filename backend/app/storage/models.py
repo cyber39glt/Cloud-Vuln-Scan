@@ -23,6 +23,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     MetaData,
@@ -229,6 +230,128 @@ class ScanJob(Base):
         CheckConstraint(
             "status <> 'succeeded' OR scan_run_id IS NOT NULL", name="succeeded_has_scan"
         ),
+    )
+
+
+# ------------------------------------------------------------------ users and access (M9)
+
+
+class Role(StrEnum):
+    ADMIN = "admin"  # every client; manages users and client assignments
+    CONSULTANT = "consultant"  # only the clients assigned to them
+
+
+class User(Base):
+    """A consultancy user. `auth_provider` + `external_subject` let a future SSO
+    provider (e.g. Entra ID) log users in without changing anything else (ADR 0009)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(254), unique=True)  # stored lower-case
+    display_name: Mapped[str] = mapped_column(String(200))
+    role: Mapped[Role] = mapped_column(_enum(Role, "user_role"))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    auth_provider: Mapped[str] = mapped_column(String(32), default="local")
+    external_subject: Mapped[str | None] = mapped_column(String(256))
+    # Argon2id hash (algorithm, parameters and salt are inside the string).
+    password_hash: Mapped[str | None] = mapped_column(String(256))
+    must_change_password: Mapped[bool] = mapped_column(default=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # TOTP: the secret is ENCRYPTED (it must be readable to check codes). The last
+    # accepted time step prevents the same code being used twice.
+    mfa_enabled: Mapped[bool] = mapped_column(default=False)
+    mfa_secret_encrypted: Mapped[str | None] = mapped_column(String(512))
+    mfa_last_used_step: Mapped[int | None]
+    failed_login_count: Mapped[int] = mapped_column(default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    __table_args__ = (
+        CheckConstraint("email = lower(email) AND length(email) > 3", name="email_normalized"),
+        CheckConstraint("length(trim(display_name)) > 0", name="display_name_not_blank"),
+        CheckConstraint(
+            "auth_provider <> 'local' OR password_hash IS NOT NULL", name="local_has_password"
+        ),
+        CheckConstraint(
+            "NOT mfa_enabled OR mfa_secret_encrypted IS NOT NULL", name="mfa_enabled_has_secret"
+        ),
+    )
+
+
+class RecoveryCode(Base):
+    """One-time MFA recovery codes, stored only as SHA-256 hashes (the codes are long
+    random values, so a fast hash is safe)."""
+
+    __tablename__ = "mfa_recovery_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    code_hash: Mapped[str] = mapped_column(String(64))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("user_id", "code_hash"),)
+
+
+class UserSession(Base):
+    """A login session. The browser holds a random token; only its SHA-256 hash is
+    stored, so a database leak does not hand out live sessions."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # False between the password step and the MFA step: such a session can only be
+    # used to complete MFA.
+    mfa_verified: Mapped[bool] = mapped_column(default=False)
+    mfa_failures: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_user_sessions_user", "user_id"),)
+
+
+class ClientAssignment(Base):
+    """Which clients a Consultant may access. Admins do not need assignments."""
+
+    __tablename__ = "client_assignments"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
+class AuditEvent(Base):
+    """Append-only record of security-relevant actions. The database refuses UPDATE
+    and DELETE on this table. No foreign keys on purpose: entries must outlive the
+    users and clients they mention. Details never contain secrets."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    action: Mapped[str] = mapped_column(String(64))  # e.g. "auth.login"
+    outcome: Mapped[str] = mapped_column(String(16))  # "success" / "failure" / "denied"
+    actor_type: Mapped[str] = mapped_column(String(16))  # "user" / "cli" / "system" / "anonymous"
+    actor_user_id: Mapped[uuid.UUID | None]
+    actor_email: Mapped[str | None] = mapped_column(String(254))
+    client_id: Mapped[uuid.UUID | None]
+    target_type: Mapped[str | None] = mapped_column(String(32))
+    target_id: Mapped[str | None] = mapped_column(String(64))
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    details: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
+
+    __table_args__ = (
+        Index("ix_audit_events_time", "occurred_at"),
+        Index("ix_audit_events_client", "client_id", "occurred_at"),
+        Index("ix_audit_events_actor", "actor_user_id", "occurred_at"),
     )
 
 

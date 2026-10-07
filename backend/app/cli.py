@@ -34,9 +34,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from app.auth import audit
+from app.auth import service as accounts
 from app.console import UNVERIFIED_NOTE, format_summary
 from app.core.config import get_settings
 from app.core.database import get_sessionmaker
@@ -54,6 +57,7 @@ from app.reporting.exports import to_csv, to_json
 from app.reporting.report import report_for_scan
 from app.scanning import WrongAccountError, scan_aws, scan_azure
 from app.storage import repository as repo
+from app.storage.models import Role, User
 
 # ASCII markers: Windows consoles do not always display symbols such as check marks.
 _MARKERS = {"ok": "[ OK ]", "failed": "[FAIL]", "skipped": "[SKIP]"}
@@ -96,6 +100,7 @@ def _clients_add(args: argparse.Namespace) -> int:
             raise CliError(
                 "A client with that name already exists (or the name is blank)."
             ) from exc
+        audit.record(db, "client.created", audit.CLI, client_id=client.id)
         print(f"Client created: {client.name}  (id {client.id})")
         return 0
 
@@ -329,6 +334,15 @@ def _save_scan(
         name = args.assessment or f"{label} assessment {account_id}"
         assessment = repo.get_or_create_assessment(db, client.id, connection.id, name)
         scan = repo.save_scan_result(db, client.id, assessment.id, result)
+        audit.record(
+            db,
+            "scan.completed",
+            audit.CLI,
+            client_id=client.id,
+            target_type="scan_run",
+            target_id=scan.id,
+            findings=len(result.findings),
+        )
         if not args.json:
             print(f'\nSaved to assessment "{assessment.name}" as scan {scan.id}.')
         return 0
@@ -413,8 +427,93 @@ def _assessments_export(args: argparse.Namespace) -> int:
         for extension, render in formats.items():
             path = EXPORT_DIR / f"{base}.{extension}"
             _write_private_file(path, render(report))
+            audit.record(
+                db,
+                "report.exported",
+                audit.CLI,
+                client_id=client.id,
+                target_type="scan_run",
+                target_id=scan_id,
+                format=extension,
+            )
             print(f"Written: {path.as_posix()}")
         print("These files contain client data: store and share them accordingly.")
+        return 0
+
+    return _db(work)
+
+
+# ------------------------------------------------------------------ users
+#
+# These run on the server with direct database access (like a database admin), so
+# they are the way to create the FIRST administrator and to recover when nobody can
+# log in. Every action is audit-logged with actor "cli".
+
+
+def _print_temporary_password(email: str, password: str) -> None:
+    print(f"Temporary password for {email}:\n\n    {password}\n")
+    print("Give it to the user through a separate, secure channel. It is shown only once.")
+    print("At first login they must change it and set up an authenticator app (MFA).")
+
+
+def _users_create(args: argparse.Namespace) -> int:
+    role = Role.ADMIN if args.admin else Role.CONSULTANT
+
+    def work(db: Session) -> int:
+        try:
+            user, password = accounts.create_user(db, args.email, args.name, role, audit.CLI)
+        except accounts.AccountError as exc:
+            raise CliError(str(exc)) from exc
+        print(f"Created {role.value} {user.email}.")
+        _print_temporary_password(user.email, password)
+        return 0
+
+    return _db(work)
+
+
+def _users_list(_: argparse.Namespace) -> int:
+    def work(db: Session) -> int:
+        users = list(db.scalars(select(User).order_by(User.email)))
+        if not users:
+            print("No users yet. Create the first administrator with: users create --admin ...")
+        for user in users:
+            flags = [
+                user.role.value,
+                "active" if user.is_active else "DEACTIVATED",
+                "mfa" if user.mfa_enabled else "no-mfa",
+            ]
+            if user.locked_until and user.locked_until > datetime.now(UTC):
+                flags.append("LOCKED")
+            print(f"{user.email}  ({', '.join(flags)})")
+        return 0
+
+    return _db(work)
+
+
+def _user_or_fail(db: Session, email: str) -> User:
+    user = accounts.find_user(db, email)
+    if user is None:
+        raise CliError(f"No user with e-mail {email}.")
+    return user
+
+
+def _users_reset_mfa(args: argparse.Namespace) -> int:
+    def work(db: Session) -> int:
+        user = _user_or_fail(db, args.email)
+        accounts.reset_mfa(db, user, audit.CLI)
+        print(f"MFA removed for {user.email}; all their sessions ended.")
+        print("They will set up a new authenticator at their next login.")
+        return 0
+
+    return _db(work)
+
+
+def _users_reset_password(args: argparse.Namespace) -> int:
+    def work(db: Session) -> int:
+        user = _user_or_fail(db, args.email)
+        password = accounts.reset_password(db, user, audit.CLI)
+        print(f"Password reset and account unlocked for {user.email}; sessions ended.")
+        _print_temporary_password(user.email, password)
         return 0
 
     return _db(work)
@@ -484,6 +583,23 @@ def _parser() -> argparse.ArgumentParser:
     azure_scan.add_argument("--regions", help="comma-separated Azure locations (default: all)")
     azure_scan.add_argument("--json", action="store_true", help="print the full dataset")
     azure_scan.set_defaults(handler=_azure_scan)
+
+    users = groups.add_parser("users", help="user accounts (server-side)").add_subparsers(
+        dest="command", required=True
+    )
+    create = users.add_parser("create", help="create a user with a temporary password")
+    create.add_argument("--email", required=True)
+    create.add_argument("--name", required=True, help="display name")
+    create.add_argument("--admin", action="store_true", help="administrator (default: consultant)")
+    create.set_defaults(handler=_users_create)
+    users.add_parser("list", help="list users").set_defaults(handler=_users_list)
+    for name, handler, help_text in (
+        ("reset-mfa", _users_reset_mfa, "remove a user's MFA (lost phone)"),
+        ("reset-password", _users_reset_password, "new temporary password; unlocks the account"),
+    ):
+        command = users.add_parser(name, help=help_text)
+        command.add_argument("--email", required=True)
+        command.set_defaults(handler=handler)
 
     assessments = groups.add_parser("assessments", help="view saved assessments").add_subparsers(
         dest="command", required=True

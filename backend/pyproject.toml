@@ -15,6 +15,9 @@ dependencies = [
     "azure-identity>=1.26,<2",
     "azure-mgmt-network>=33,<34",
     "azure-mgmt-storage>=25.2,<26",
+    "argon2-cffi>=25.1,<26",
+    "pyotp>=2.9,<3",
+    "cryptography>=50,<51",
 ]
 
 [dependency-groups]

@@ -47,8 +47,8 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | Module | Responsibility | Status |
 |---|---|---|
 | `core` | Configuration, logging, database engine | **M0 ✓** |
-| `api` | HTTP routes ([guide](api.md)) | Health **M0 ✓**; data API **M8 ✓** (development only until M9) |
-| `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
+| `api` | HTTP routes ([guide](api.md)) | Health **M0 ✓**; data API **M8 ✓**; login + roles **M9 ✓** |
+| `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log ([guide](users.md)) | **M9 ✓** |
 | `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure **M6–M7 ✓** ([guide](azure-connection.md)) |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓**; 19 rules after **R1 ✓** ([list](rules.md#enabled-rules)) |
@@ -90,6 +90,15 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M9: users, MFA, roles and audit
+
+- Local accounts with Argon2id passwords; mandatory authenticator-app MFA with
+  recovery codes; server-side sessions (idle and absolute timeouts); lockout and rate
+  limiting; Admin / Consultant roles with assigned-client access enforced on every
+  endpoint ([guide](users.md), [ADR 0020](decisions/0020-authentication-implementation.md)).
+- Append-only audit log of logins, MFA, account changes, data access, scans and exports.
+- `users` command-line tools to create the first admin and recover access.
 
 ### M8: API and background worker
 
@@ -182,7 +191,7 @@ The same container image runs everywhere; only environment variables differ
 | **M7** | **Azure collectors + scan (ARM)** ✓ — Entra ID (Graph) checks come with new rules |
 | **R1** | **Rule expansion: IAM, S3, RDS, Azure storage transport, SQL, Activity Log, Defender** ✓ ([ADR 0018](decisions/0018-rule-expansion-r1.md)) |
 | **M8** | **API + background worker + scan progress** ✓ ([ADR 0019](decisions/0019-api-worker-and-pre-auth-boundary.md)) |
-| M9 | Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log |
+| **M9** | **Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log** ✓ ([ADR 0020](decisions/0020-authentication-implementation.md)) |
 | M10 | Dashboard |
 | M11 | PDF report |
 | M12 | Finding review workflow and assessment finalization |

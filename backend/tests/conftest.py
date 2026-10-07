@@ -15,6 +15,16 @@ from app.main import app
 ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
 
 
+@pytest.fixture(autouse=True)
+def _reset_login_rate_limit():
+    """The login limiter is per process; each test starts with a clean slate."""
+    from app.auth.ratelimit import login_limiter
+
+    login_limiter.reset()
+    yield
+    login_limiter.reset()
+
+
 @pytest.fixture
 def client():
     # "localhost": the API only answers to allowed host names (DNS-rebinding defence).
@@ -127,3 +137,42 @@ def _simulate_bucket_policy_status(monkeypatch) -> None:
         return response
 
     monkeypatch.setattr(BaseClient, "_make_api_call", make_api_call)
+
+
+# ------------------------------------------------------------------ API clients
+
+
+@pytest.fixture
+def http(db, monkeypatch):
+    """An API client (not logged in) whose requests run inside the test transaction."""
+    from sqlalchemy.orm import sessionmaker
+
+    from app.api import deps
+    from app.core.config import get_settings
+    from tests.auth_helpers import plain_http_settings
+
+    factory = sessionmaker(
+        bind=db.connection(), join_transaction_mode="create_savepoint", expire_on_commit=False
+    )
+    monkeypatch.setattr(deps, "get_sessionmaker", lambda: factory)
+    app.dependency_overrides[get_settings] = plain_http_settings
+    with TestClient(app, base_url="http://localhost") as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def admin(db):
+    """An administrator with MFA set up: (user, totp_secret)."""
+    from tests.auth_helpers import make_user
+
+    return make_user(db, "admin@subtletech.test")
+
+
+@pytest.fixture
+def api(http, db, admin):
+    """An API client logged in as the administrator."""
+    from tests.auth_helpers import login
+
+    login(http, db, *admin)
+    return http

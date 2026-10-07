@@ -4,6 +4,12 @@ How assessment data is stored. Decision record:
 [ADR 0015](decisions/0015-persistence-and-client-isolation.md).
 
 ```
+users                        consultancy staff (Admin / Consultant), MFA, lockout
+  ├─ user_sessions           login sessions (only token hashes stored)
+  ├─ mfa_recovery_codes      one-time codes (hashed)
+  └─ client_assignments      which clients a Consultant may access
+audit_events                 append-only record of security-relevant actions
+
 clients                      one row per consultancy client
   └─ cloud_connections       an AWS account (or Azure subscription) + its ExternalId
        └─ assessments        a named engagement, e.g. "Q1 AWS review"
@@ -14,6 +20,11 @@ clients                      one row per consultancy client
 
 | Table | Key columns | Notes |
 |---|---|---|
+| `users` | `email` (unique, lower-case), `role`, `is_active`, `password_hash` (Argon2id), `mfa_enabled`, `mfa_secret_encrypted`, `failed_login_count`, `locked_until` | `auth_provider` / `external_subject` reserved for SSO ([ADR 0020](decisions/0020-authentication-implementation.md)) |
+| `user_sessions` | `token_hash`, `user_id`, `mfa_verified`, `last_seen_at`, `expires_at` | Deleted on logout, password/MFA change, deactivation |
+| `mfa_recovery_codes` | `user_id`, `code_hash`, `used_at` | Single use |
+| `client_assignments` | `user_id`, `client_id` | Consultant access; admins need none |
+| `audit_events` | `occurred_at`, `action`, `outcome`, `actor_*`, `client_id`, `target_*`, `ip_address`, `details` | **Append-only** (UPDATE/DELETE/TRUNCATE refused); no foreign keys so it outlives users and clients |
 | `clients` | `id`, `name` (unique, not blank) | |
 | `cloud_connections` | `client_id`, `provider`, `account_id`, `external_id` (unique) | One per client and account |
 | `assessments` | `client_id`, `connection_id`, `name`, `status` | `draft` → `in_review` (after a scan) → `finalized` (M12) |

@@ -1,20 +1,21 @@
-# Using the API (development)
+# Using the API
 
-The API is what the dashboard (M10) will use. Until user accounts exist (M9) it works
-**only on your own machine** in development; in production it refuses every data
-request. See [ADR 0019](decisions/0019-api-worker-and-pre-auth-boundary.md).
+The API is what the dashboard (M10) will use. Every data request needs a login
+(password + authenticator code): see **[User accounts and logging in](users.md)** first.
 
-## The easy way: interactive docs
+## The easy way: interactive docs (development)
 
 1. `.\scripts\dev.ps1 up`
 2. Open **http://localhost:8000/docs** in your browser.
-3. Click an endpoint → **Try it out** → fill in the fields → **Execute**.
+3. Log in (`/api/v1/auth/login`, then `/api/v1/auth/mfa/verify`); the browser keeps
+   the session cookie for the following requests.
+4. Click an endpoint → **Try it out** → fill in the fields → **Execute**.
 
 ## A complete example
 
 | Step | Request | Body |
 |---|---|---|
-| 1. Create a client | `POST /api/v1/clients` | `{"name": "Acme Ltd"}` |
+| 1. Create a client (admins) | `POST /api/v1/clients` | `{"name": "Acme Ltd"}` |
 | 2. Register an AWS account | `POST /api/v1/clients/{client_id}/connections/aws` | `{"account_id": "123456789012"}` |
 | …or an Azure subscription | `POST /api/v1/clients/{client_id}/connections/azure` | `{"tenant_id": "<guid>", "subscription_id": "<guid>"}` |
 | 3. Create an assessment | `POST /api/v1/clients/{client_id}/assessments` | `{"connection_id": "<id from step 2>", "name": "Q1 review"}` |
@@ -42,9 +43,11 @@ Only one scan per assessment can be queued or running at a time. Watch the worke
 
 ## Rules the API enforces
 
-- Requests that create or change something must be JSON (`Content-Type:
-  application/json`). Anything else gets **415**.
+- You must be logged in (**401** otherwise). Consultants can use only the clients
+  assigned to them; anything else is **404 Not found**, exactly like a record that
+  does not exist. Admin-only actions return **403** to Consultants.
+- `POST` requests must be JSON (`Content-Type: application/json`; send `{}` when there
+  is nothing to send). Anything else gets **415**. Requests from other websites
+  (a foreign `Origin` header) get **403**.
 - Only `localhost` / `127.0.0.1` are accepted as host names (setting
   `API_ALLOWED_HOSTS`). Anything else gets **400**.
-- Records of another client are reported as **404 Not found**, exactly like records
-  that do not exist.
