@@ -102,6 +102,37 @@ def get_or_create_aws_connection(
     return connection
 
 
+def get_or_create_azure_connection(
+    session: Session, client_id: uuid.UUID, tenant_id: str, subscription_id: str
+) -> CloudConnection:
+    """One connection per client and Azure subscription. No secret is stored: the
+    platform's own app identity is used, scoped to the client's tenant."""
+    subscription_id = subscription_id.lower()
+    connection = session.scalar(
+        select(CloudConnection).where(
+            CloudConnection.client_id == client_id,
+            CloudConnection.provider == Provider.AZURE,
+            CloudConnection.account_id == subscription_id,
+        )
+    )
+    if connection is None:
+        connection = CloudConnection(
+            client_id=client_id,
+            provider=Provider.AZURE,
+            account_id=subscription_id,
+            tenant_id=tenant_id.lower(),
+        )
+        session.add(connection)
+        session.flush()
+        logger.info(
+            "cloud connection created",
+            extra={"client_id": str(client_id), "connection_id": str(connection.id)},
+        )
+    elif connection.tenant_id != tenant_id.lower():
+        raise ValueError("this subscription is already registered with a different tenant")
+    return connection
+
+
 def get_connection(
     session: Session, client_id: uuid.UUID, provider: Provider, account_id: str
 ) -> CloudConnection:

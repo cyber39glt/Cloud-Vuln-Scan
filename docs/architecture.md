@@ -49,7 +49,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `core` | Configuration, logging, database engine | **M0 ✓** |
 | `api` | HTTP routes | Health only (**M0 ✓**) |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
-| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure M6 |
+| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure connection **M6 ✓** ([guide](azure-connection.md)); Azure collectors M7 |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
@@ -90,6 +90,15 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M6: Azure connector
+
+- Multi-tenant Entra app model: admin consent + Reader/Security Reader; no client secrets stored
+- Read-only guard as an azure-core pipeline policy: GET only, ARM host only, allowlisted
+  resource types; POST actions such as `listKeys` and data-plane hosts always refused
+- Validation: identity, sign-in to client tenant, subscription tenant/state (fails
+  closed), permission probes, guard self-test; `dev.ps1 azure connect|validate`
+- Migration 0002: `tenant_id` on connections, required for Azure by the database
 
 ### M5: JSON and CSV exports
 
@@ -149,7 +158,7 @@ The same container image runs everywhere; only environment variables differ
 | **M3** | **AWS collectors + scan; sandbox test fixtures** ✓ |
 | **M4** | **Persistence: schema, migrations, stored scan runs** ✓ |
 | **M5** | **JSON + CSV exports** ✓ |
-| M6 | Azure connector: multi-tenant app, validation, read-only guard |
+| **M6** | **Azure connector: multi-tenant app, validation, read-only guard** ✓ |
 | M7 | Azure collectors + rules (ARM + minimal Graph) |
 | M8 | API + background worker + scan progress |
 | M9 | Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log |

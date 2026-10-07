@@ -6,7 +6,7 @@ with a composite foreign key on (parent id, client_id). PostgreSQL therefore rej
 any row that would link one client's data to another client's record.
 
     clients
-      └─ cloud_connections   (AWS account / Azure subscription + ExternalId)
+      └─ cloud_connections   (AWS account + ExternalId, or Azure tenant + subscription)
            └─ assessments
                 └─ scan_runs (frozen snapshot of the full AssessmentResult + SHA-256)
                      └─ findings (queryable copy of each finding, for dashboards)
@@ -97,12 +97,17 @@ class CloudConnection(Base):
     account_id: Mapped[str] = mapped_column(String(64))  # AWS account / Azure subscription
     # AWS only. Not a credential on its own, but it must stay unique per connection.
     external_id: Mapped[str | None] = mapped_column(String(1224), unique=True)
+    # Azure only: the client's Entra tenant (directory) ID.
+    tenant_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     __table_args__ = (
         ForeignKeyConstraint(["client_id"], ["clients.id"], ondelete="CASCADE"),
         UniqueConstraint("client_id", "provider", "account_id"),
         UniqueConstraint("id", "client_id"),  # target for composite foreign keys
+        CheckConstraint(
+            "provider <> 'azure' OR tenant_id IS NOT NULL", name="azure_requires_tenant"
+        ),
     )
 
 

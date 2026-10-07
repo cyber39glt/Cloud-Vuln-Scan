@@ -15,7 +15,10 @@ from typing import Any
 import boto3
 
 from app.domain.enums import Provider
+from app.providers.common import ReadOnlyViolation
 from app.rules.registry import ALL_RULES
+
+__all__ = ["ReadOnlyViolation", "guarded_session", "install_guard", "assessment_operations"]
 
 # Read operations are named Describe*, List* or Get* in AWS APIs.
 READ_PREFIXES = ("Describe", "List", "Get")
@@ -41,10 +44,6 @@ def assessment_operations() -> frozenset[str]:
     if not_reads:
         raise ValueError(f"non-read operations cannot be allowed in client accounts: {not_reads}")
     return operations
-
-
-class ReadOnlyViolation(PermissionError):
-    """Raised when code attempts an AWS operation that is not on the allowlist."""
 
 
 def _service_prefix(model: Any) -> str:

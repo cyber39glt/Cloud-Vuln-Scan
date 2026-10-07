@@ -10,7 +10,6 @@ Checks, in order (later checks are skipped if an earlier essential one fails):
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.config import Settings
@@ -22,6 +21,7 @@ from app.providers.aws.session import (
     assume_assessment_role,
     platform_session,
 )
+from app.providers.common import ValidationReport
 
 logger = logging.getLogger(__name__)
 
@@ -39,26 +39,6 @@ PERMISSION_PROBES: dict[str, Probe | None] = {
     ).describe_trails(),
     "cloudtrail:GetTrailStatus": None,
 }
-
-
-@dataclass(frozen=True)
-class Check:
-    name: str
-    status: str  # "ok", "failed" or "skipped"
-    detail: str = ""
-
-
-@dataclass
-class ValidationReport:
-    account_id: str
-    checks: list[Check] = field(default_factory=list)
-
-    @property
-    def ok(self) -> bool:
-        return all(c.status != "failed" for c in self.checks)
-
-    def add(self, name: str, status: str, detail: str = "") -> None:
-        self.checks.append(Check(name, status, detail))
 
 
 def _problem_text(error: Exception) -> str:

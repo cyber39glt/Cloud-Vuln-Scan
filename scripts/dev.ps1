@@ -15,7 +15,7 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
                  "secrets", "check", "build", "reset", "demo", "aws", "migrate",
-                 "clients", "assessments")]
+                 "clients", "assessments", "azure")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -90,6 +90,9 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
               aws connect --client "Acme Ltd" --account-id 123456789012
               aws scan --client "Acme Ltd" --account-id 123456789012 [--regions eu-west-2]
               (use --external-id instead of --client for an unsaved one-off scan)
+  azure     Azure connection tools, e.g.:
+              azure connect --client "Acme Ltd" --tenant-id <guid> --subscription-id <guid>
+              azure validate --client "Acme Ltd" --subscription-id <guid>
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
@@ -141,7 +144,7 @@ try {
             Invoke-Migrations
         }
         "migrate" { Invoke-Migrations }
-        { $_ -in "clients", "assessments" } {
+        { $_ -in "clients", "assessments", "azure" } {
             Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.cli", $Command) + $ExtraArgs)
         }
         "status"  { Invoke-Compose @("ps") }

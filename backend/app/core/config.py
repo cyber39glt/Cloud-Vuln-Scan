@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     )
     aws_session_duration_seconds: int = Field(default=3600, ge=900, le=3600)
 
+    # Azure: the consultancy's multi-tenant Entra application (ADR 0017). The app ID
+    # is not a secret. The client secret is for DEVELOPMENT only; production will use
+    # keyless workload identity federation.
+    azure_client_id: str = Field(
+        default="",
+        pattern=r"^$|^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$",
+    )
+    azure_client_secret: SecretStr = SecretStr("")
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

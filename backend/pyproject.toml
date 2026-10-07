@@ -12,6 +12,9 @@ dependencies = [
     "psycopg[binary]>=3.3,<3.4",
     "boto3>=1.43,<2",
     "alembic>=1.20,<2",
+    "azure-identity>=1.26,<2",
+    "azure-mgmt-network>=33,<34",
+    "azure-mgmt-storage>=25.2,<26",
 ]
 
 [dependency-groups]
