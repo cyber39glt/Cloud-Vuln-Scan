@@ -15,6 +15,8 @@ Azure
     azure connect --client "Acme Ltd" --tenant-id <guid> --subscription-id <guid>
         register the client's subscription and print the onboarding steps
     azure validate --subscription-id <guid> (--client "Acme Ltd" | --tenant-id <guid>)
+    azure scan --subscription-id <guid> (--client "Acme Ltd" [--assessment NAME] | --tenant-id ...)
+               [--regions uksouth,westeurope] [--json]
 Assessments
     assessments list --client "Acme Ltd"
     assessments show --client "Acme Ltd" --scan <scan-id> [--json]
@@ -45,11 +47,12 @@ from app.providers.aws.errors import describe_aws_error
 from app.providers.aws.session import AwsConnection, generate_external_id
 from app.providers.aws.validation import validate_connection
 from app.providers.azure import validation as azure_validation
+from app.providers.azure.errors import describe_azure_error
 from app.providers.azure.session import AzureConnection, admin_consent_url
 from app.providers.common import ValidationReport
 from app.reporting.exports import to_csv, to_json
 from app.reporting.report import report_for_scan
-from app.scanning import WrongAccountError, scan_aws
+from app.scanning import WrongAccountError, scan_aws, scan_azure
 from app.storage import repository as repo
 
 # ASCII markers: Windows consoles do not always display symbols such as check marks.
@@ -228,7 +231,8 @@ def _azure_connect(args: argparse.Namespace) -> int:
     return _db(work)
 
 
-def _azure_validate(args: argparse.Namespace) -> int:
+def _azure_connection(args: argparse.Namespace) -> AzureConnection:
+    """From --tenant-id, or from the client's saved connection."""
     tenant_id = args.tenant_id
     if args.client:
 
@@ -249,14 +253,44 @@ def _azure_validate(args: argparse.Namespace) -> int:
 
         _db(work)
     try:
-        connection = AzureConnection(tenant_id or "", args.subscription_id)
+        return AzureConnection(tenant_id or "", args.subscription_id.lower())
     except ValueError as exc:
         raise CliError(f"Invalid input: {exc}") from exc
+
+
+def _azure_validate(args: argparse.Namespace) -> int:
+    connection = _azure_connection(args)
     print(
         f"Validating Azure subscription {connection.subscription_id} "
         f"(tenant {connection.tenant_id})\n"
     )
     return _print_report(azure_validation.validate_connection(connection, get_settings()))
+
+
+def _azure_scan(args: argparse.Namespace) -> int:
+    connection = _azure_connection(args)
+    regions = [r.strip() for r in args.regions.split(",") if r.strip()] if args.regions else None
+    if not args.json:
+        scope = ", ".join(regions) if regions else "all regions"
+        print(f"Assessing Azure subscription {connection.subscription_id} ({scope}). Read-only.")
+
+    try:
+        result = scan_azure(connection, get_settings(), regions=regions)
+    except WrongAccountError as exc:
+        raise CliError(f"Stopped before collecting anything: {exc}") from exc
+    except Exception as exc:
+        problem = describe_azure_error(exc)
+        raise CliError(
+            f"Scan failed: {problem.message} {problem.hint}".strip()
+            + "\nTip: run 'azure validate' with the same values to diagnose."
+        ) from exc
+
+    _print_result(result, args.json)
+    if args.client:
+        _save_scan(args, result, Provider.AZURE, connection.subscription_id)
+    elif not args.json:
+        print("\n(Not saved: use --client to store results.)")
+    return 0
 
 
 def _aws_scan(args: argparse.Namespace) -> int:
@@ -279,17 +313,20 @@ def _aws_scan(args: argparse.Namespace) -> int:
 
     _print_result(result, args.json)
     if args.client:
-        _save_scan(args, result)
+        _save_scan(args, result, Provider.AWS, args.account_id)
     elif not args.json:
         print("\n(Not saved: use --client to store results.)")
     return 0
 
 
-def _save_scan(args: argparse.Namespace, result: AssessmentResult) -> None:
+def _save_scan(
+    args: argparse.Namespace, result: AssessmentResult, provider: Provider, account_id: str
+) -> None:
     def work(db: Session) -> int:
         client = repo.find_client(db, args.client)
-        connection = repo.get_connection(db, client.id, Provider.AWS, args.account_id)
-        name = args.assessment or f"AWS assessment {args.account_id}"
+        connection = repo.get_connection(db, client.id, provider, account_id)
+        label = "AWS" if provider == Provider.AWS else "Azure"
+        name = args.assessment or f"{label} assessment {account_id}"
         assessment = repo.get_or_create_assessment(db, client.id, connection.id, name)
         scan = repo.save_scan_result(db, client.id, assessment.id, result)
         if not args.json:
@@ -424,7 +461,7 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--json", action="store_true", help="print the full dataset")
         command.set_defaults(handler=handler)
 
-    azure = groups.add_parser("azure", help="Azure connection tools").add_subparsers(
+    azure = groups.add_parser("azure", help="Azure connection and assessment tools").add_subparsers(
         dest="command", required=True
     )
     azure_connect = azure.add_parser("connect", help="register a client's Azure subscription")
@@ -438,6 +475,15 @@ def _parser() -> argparse.ArgumentParser:
     azure_source.add_argument("--client", help="client name or ID (uses the saved connection)")
     azure_source.add_argument("--tenant-id", help="tenant ID, for one-off use")
     azure_check.set_defaults(handler=_azure_validate)
+    azure_scan = azure.add_parser("scan", help="run a read-only Azure assessment")
+    azure_scan.add_argument("--subscription-id", required=True, help="subscription ID")
+    azure_scan_source = azure_scan.add_mutually_exclusive_group(required=True)
+    azure_scan_source.add_argument("--client", help="client name or ID (results are SAVED)")
+    azure_scan_source.add_argument("--tenant-id", help="tenant ID, for an unsaved one-off scan")
+    azure_scan.add_argument("--assessment", help="assessment name (with --client)")
+    azure_scan.add_argument("--regions", help="comma-separated Azure locations (default: all)")
+    azure_scan.add_argument("--json", action="store_true", help="print the full dataset")
+    azure_scan.set_defaults(handler=_azure_scan)
 
     assessments = groups.add_parser("assessments", help="view saved assessments").add_subparsers(
         dest="command", required=True

@@ -6,10 +6,10 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M6, Azure connector).**
-> AWS accounts can be assessed from the command line, results are stored per client
-> and exported as JSON/CSV. Azure connections can be validated; Azure scanning, user
-> accounts, the dashboard and PDF are not built yet.
+> **Status: early development (milestone M7, Azure scanning).**
+> AWS accounts and Azure subscriptions can be assessed from the command line, results
+> are stored per client and exported as JSON/CSV. User accounts, the web dashboard and
+> PDF reports are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -98,6 +98,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `assessments export --client ... --scan <id> [--format json\|csv\|all]` | Write JSON/CSV reports to `backend\exports\` ([details](docs/exports.md)) |
 | `azure connect --client ... --tenant-id <guid> --subscription-id <guid>` | Register a client's Azure subscription and print onboarding steps |
 | `azure validate --client ... --subscription-id <guid>` | Check an Azure connection works and is read-only ([guide](docs/azure-connection.md)) |
+| `azure scan --client ... --subscription-id <guid> [--assessment NAME] [--regions r1,r2] [--json]` | Run a read-only Azure assessment and **save** it |
 | `migrate` | Apply database migrations |
 | `reset` | Stop everything **and delete the local database** (asks first) |
 
@@ -147,7 +148,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   │   ├── rules/           Security rules and the rule engine
 │   │   ├── frameworks/      CIS / NIST CSF / SOC 2 mappings
 │   │   ├── providers/aws/   AWS connector: read-only guard, AssumeRole, collectors
-│   │   ├── providers/azure/ Azure connector: pipeline guard, validation
+│   │   ├── providers/azure/ Azure connector: pipeline guard, validation, collectors
 │   │   ├── storage/         Database models and client-scoped data access
 │   │   └── reporting/       Report dataset + JSON/CSV exports
 │   ├── schemas/             Published JSON Schema of the JSON export
@@ -160,6 +161,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   ├── architecture.md      Architecture overview and roadmap
 │   └── decisions/           Architecture Decision Records (ADRs)
 ├── infra/aws/               CloudFormation: client read-only role; sandbox test fixtures
+├── infra/azure/             ARM template: sandbox test fixtures
 ├── scripts/dev.ps1          Windows development commands
 ├── docker-compose.yml       Local environment: PostgreSQL + API
 ├── .env.example             Documented configuration template

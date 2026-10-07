@@ -49,7 +49,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `core` | Configuration, logging, database engine | **M0 ✓** |
 | `api` | HTTP routes | Health only (**M0 ✓**) |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log | Planned |
-| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure connection **M6 ✓** ([guide](azure-connection.md)); Azure collectors M7 |
+| `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure **M6–M7 ✓** ([guide](azure-connection.md)) |
 | `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓** (4 rules) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
@@ -90,6 +90,15 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M7: Azure scanning
+
+- Collectors for NSGs (inbound custom rules normalized to the shared facet) and storage
+  accounts; optional region scope; gaps for denied reads
+- `scanning.scan_azure`: confirm tenant and state → collect → evaluate; the same rules
+  (`NET-001`, `NET-002`, `AZ-STO-001`) now run on real Azure data
+- `dev.ps1 azure scan` (saved with `--client`), exports work unchanged
+- Sandbox ARM fixture template, checked against the rules by a test
 
 ### M6: Azure connector
 
@@ -159,7 +168,7 @@ The same container image runs everywhere; only environment variables differ
 | **M4** | **Persistence: schema, migrations, stored scan runs** ✓ |
 | **M5** | **JSON + CSV exports** ✓ |
 | **M6** | **Azure connector: multi-tenant app, validation, read-only guard** ✓ |
-| M7 | Azure collectors + rules (ARM + minimal Graph) |
+| **M7** | **Azure collectors + scan (ARM)** ✓ — Entra ID (Graph) checks come with new rules |
 | M8 | API + background worker + scan progress |
 | M9 | Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log |
 | M10 | Dashboard |
