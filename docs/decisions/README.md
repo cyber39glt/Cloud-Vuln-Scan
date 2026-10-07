@@ -24,5 +24,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0016](0016-report-dataset-and-exports.md) | Report dataset; JSON/CSV exports; CSV-injection protection | Accepted |
 | [0017](0017-azure-connector.md) | Azure connector: pipeline guard, client access, dev identity | Accepted |
 | [0018](0018-rule-expansion-r1.md) | Rule expansion R1: credential report exception, no guessing, ARM lists | Accepted |
+| [0019](0019-api-worker-and-pre-auth-boundary.md) | Data API, scan worker, and the boundary before user authentication | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

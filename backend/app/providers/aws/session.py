@@ -33,9 +33,9 @@ CLIENT_CONFIG = Config(
     user_agent_extra="cloud-vuln-scan",
 )
 
-ACCOUNT_ID_PATTERN = re.compile(r"^\d{12}$")
+ACCOUNT_ID_PATTERN = re.compile(r"^\d{12}$", re.ASCII)
 # AWS allows these characters in an ExternalId.
-EXTERNAL_ID_PATTERN = re.compile(r"^[\w+=,.@:/-]{2,1224}$")
+EXTERNAL_ID_PATTERN = re.compile(r"^[\w+=,.@:/-]{2,1224}$", re.ASCII)
 
 
 @dataclass(frozen=True)

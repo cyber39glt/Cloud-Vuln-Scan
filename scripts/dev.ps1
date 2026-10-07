@@ -65,11 +65,11 @@ function Show-Help {
     Write-Host @"
 Usage: .\scripts\dev.ps1 <command> [extra args]
 
-  up        Build and start PostgreSQL + API, then apply database migrations
+  up        Build and start PostgreSQL + API + scan worker, then apply migrations
   down      Stop the containers (database data is kept)
   restart   down, then up
   status    Show running containers and their health
-  logs      Follow the API logs (Ctrl+C to stop following)
+  logs      Follow the API and worker logs (Ctrl+C to stop); 'logs worker' for one
   test      Run the test suite inside the container (extra args go to pytest)
   lint      Check code style and common mistakes with Ruff
   format    Auto-format and auto-fix code with Ruff
@@ -97,7 +97,8 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
-             http://localhost:8000/docs     (interactive API docs, development only)
+             http://localhost:8000/docs     (interactive API docs, development only:
+             create clients, request scans and follow their progress; see docs/api.md)
 "@
 }
 
@@ -136,7 +137,8 @@ try {
             Write-Step "Starting containers"
             Invoke-Compose @("up", "--build", "--detach", "--wait")
             Invoke-Migrations
-            Write-Host "`nAPI running at http://localhost:8000  (try /health and /health/ready)" -ForegroundColor Green
+            Write-Host "`nAPI running at http://localhost:8000  (try /health and /docs)" -ForegroundColor Green
+            Write-Host "Scan worker running: '.\scripts\dev.ps1 logs worker' shows its activity." -ForegroundColor Green
         }
         "down"    { Write-Step "Stopping containers"; Invoke-Compose @("down") }
         "restart" {
@@ -149,7 +151,10 @@ try {
             Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.cli", $Command) + $ExtraArgs)
         }
         "status"  { Invoke-Compose @("ps") }
-        "logs"    { Invoke-Compose @("logs", "--follow", "api") }
+        "logs" {
+            $services = if ($ExtraArgs.Count -gt 0) { $ExtraArgs } else { @("api", "worker") }
+            Invoke-Compose (@("logs", "--follow") + $services)
+        }
         "test"    { Invoke-Tests }
         "lint"    { Invoke-Lint }
         "format" {

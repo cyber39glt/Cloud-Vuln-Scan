@@ -6,12 +6,9 @@ rolled back afterwards.
 """
 
 import uuid
-from pathlib import Path
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,8 +18,6 @@ from app.sample_data import sample_aws_inventory
 from app.storage import repository as repo
 from app.storage.models import AssessmentStatus, FindingRecord, ScanRun
 
-ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
-
 
 def test_result_hash_is_canonical():
     """Key order and formatting must not change the hash; content changes must."""
@@ -31,39 +26,6 @@ def test_result_hash_is_canonical():
     assert repo.result_hash(a) == repo.result_hash(b)
     assert repo.result_hash(a) != repo.result_hash(a | {"b": 2})
     assert len(repo.result_hash(a)) == 64
-
-
-@pytest.fixture(scope="module")
-def test_engine():
-    settings = Settings(_env_file=None)
-    test_db = f"{settings.postgres_db}_test"
-    admin = create_engine(settings.database_url, isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db}" WITH (FORCE)'))
-        conn.execute(text(f'CREATE DATABASE "{test_db}"'))
-
-    engine = create_engine(settings.database_url.set(database=test_db))
-    config = Config(str(ALEMBIC_INI))
-    with engine.begin() as conn:
-        config.attributes["connection"] = conn
-        command.upgrade(config, "head")
-    yield engine
-
-    engine.dispose()
-    with admin.connect() as conn:
-        conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db}" WITH (FORCE)'))
-    admin.dispose()
-
-
-@pytest.fixture
-def db(test_engine):
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, join_transaction_mode="create_savepoint")
-    yield session
-    session.close()
-    transaction.rollback()
-    connection.close()
 
 
 def _client_with_scan(db: Session, name: str = "Acme Ltd"):
@@ -369,7 +331,6 @@ def test_database_requires_a_tenant_for_azure_connections(db):
 @integration
 def test_cli_azure_connect_prints_onboarding_steps(cli_db, capsys, monkeypatch):
     from app import cli
-    from app.core.config import Settings
 
     monkeypatch.setattr(
         cli,
