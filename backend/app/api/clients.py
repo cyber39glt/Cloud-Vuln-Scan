@@ -1,8 +1,10 @@
 """Clients and their cloud connections."""
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
 
-from app.api.deps import ClientScope, CurrentOperator, DbSession
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from app.api.deps import AdminUser, ClientScope, CurrentUser, DbSession, client_ip
 from app.api.schemas import (
     AwsConnectionCreate,
     AwsConnectionOut,
@@ -12,24 +14,32 @@ from app.api.schemas import (
     ClientOut,
     ConnectionOut,
 )
+from app.auth import audit, service
 from app.core.config import get_settings
 from app.storage import repository as repo
 
 router = APIRouter(prefix="/api/v1/clients", tags=["clients"])
 
+Ip = Annotated[str | None, Depends(client_ip)]
+
 
 @router.get("")
-def list_clients(db: DbSession, operator: CurrentOperator) -> list[ClientOut]:
-    del operator  # M9: only the clients assigned to this user (all for Admins).
-    return [ClientOut.model_validate(c) for c in repo.list_clients(db)]
+def list_clients(db: DbSession, user: CurrentUser) -> list[ClientOut]:
+    """Admins see every client; Consultants only those assigned to them."""
+    clients = repo.list_clients(db)
+    if not user.is_admin:
+        allowed = service.assigned_client_ids(db, user.id)
+        clients = [c for c in clients if c.id in allowed]
+    return [ClientOut.model_validate(c) for c in clients]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_client(body: ClientCreate, db: DbSession, operator: CurrentOperator) -> ClientOut:
-    del operator  # M9: Admins only.
+def create_client(body: ClientCreate, db: DbSession, admin: AdminUser, ip: Ip) -> ClientOut:
     if any(c.name.lower() == body.name.lower() for c in repo.list_clients(db)):
         raise HTTPException(status.HTTP_409_CONFLICT, "A client with this name already exists.")
-    return ClientOut.model_validate(repo.create_client(db, body.name))
+    client = repo.create_client(db, body.name)
+    audit.record(db, "client.created", admin.actor, client_id=client.id, ip_address=ip)
+    return ClientOut.model_validate(client)
 
 
 @router.get("/{client_id}")
@@ -43,12 +53,24 @@ def list_connections(client: ClientScope, db: DbSession) -> list[ConnectionOut]:
 
 
 @router.post("/{client_id}/connections/aws", status_code=status.HTTP_201_CREATED)
-def connect_aws(body: AwsConnectionCreate, client: ClientScope, db: DbSession) -> AwsConnectionOut:
+def connect_aws(
+    body: AwsConnectionCreate, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> AwsConnectionOut:
     """Register an AWS account. Idempotent: the same account returns the same
     ExternalId. Nothing is contacted in AWS."""
     settings = get_settings()
     connection = repo.get_or_create_aws_connection(
         db, client.id, body.account_id, settings.consultancy_name
+    )
+    audit.record(
+        db,
+        "connection.registered",
+        user.actor,
+        client_id=client.id,
+        target_type="connection",
+        target_id=connection.id,
+        ip_address=ip,
+        provider="aws",
     )
     return AwsConnectionOut(
         connection=ConnectionOut.model_validate(connection),
@@ -60,7 +82,9 @@ def connect_aws(body: AwsConnectionCreate, client: ClientScope, db: DbSession) -
 
 
 @router.post("/{client_id}/connections/azure", status_code=status.HTTP_201_CREATED)
-def connect_azure(body: AzureConnectionCreate, client: ClientScope, db: DbSession) -> ConnectionOut:
+def connect_azure(
+    body: AzureConnectionCreate, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> ConnectionOut:
     """Register an Azure subscription. No secret is stored. Nothing is contacted in
     Azure; the client still grants consent and roles (docs/azure-connection.md)."""
     try:
@@ -69,4 +93,14 @@ def connect_azure(body: AzureConnectionCreate, client: ClientScope, db: DbSessio
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    audit.record(
+        db,
+        "connection.registered",
+        user.actor,
+        client_id=client.id,
+        target_type="connection",
+        target_id=connection.id,
+        ip_address=ip,
+        provider="azure",
+    )
     return ConnectionOut.model_validate(connection)

@@ -22,7 +22,7 @@ from app.sample_data import sample_aws_inventory, sample_azure_inventory
 from app.scanning import WrongAccountError
 from app.storage import jobs
 from app.storage import repository as repo
-from app.storage.models import Client, FindingRecord, JobStatus, ScanJob, ScanRun
+from app.storage.models import AuditEvent, Client, FindingRecord, JobStatus, ScanJob, ScanRun
 from app.worker import Scanners, work_once
 
 pytestmark = pytest.mark.integration
@@ -96,6 +96,12 @@ def test_aws_scan_job_runs_and_saves_the_result(db, factory, worker_settings, aw
     )
     assert "NET-001" in rules
     assert work_once(worker_settings, factory) is False  # queue now empty
+    [event] = db.scalars(select(AuditEvent).where(AuditEvent.action == "scan.completed"))
+    assert (event.actor_type, event.client_id, event.target_id) == (
+        "system",
+        job.client_id,
+        str(scan.id),
+    )
 
 
 def test_azure_job_uses_the_stored_tenant_and_subscription(db, factory, worker_settings):
@@ -165,6 +171,8 @@ def test_failures_are_stored_in_plain_language(db, factory, worker_settings, err
     assert "hunter2" not in job.error_message and "secret detail" not in job.error_message
     assert job.scan_run_id is None
     assert db.scalar(select(ScanRun).where(ScanRun.client_id == job.client_id)) is None
+    failed = db.scalar(select(AuditEvent).where(AuditEvent.action == "scan.failed"))
+    assert failed.details == {"error_code": code} and failed.outcome == "failure"
 
 
 def test_guard_violation_is_logged_as_an_error(db, factory, worker_settings, caplog):

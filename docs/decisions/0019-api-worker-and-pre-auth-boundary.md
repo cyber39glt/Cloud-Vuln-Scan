@@ -1,6 +1,6 @@
 # 0019. Data API, scan worker, and the boundary before user authentication
 
-- **Status:** Accepted
+- **Status:** Accepted; points 1–2 superseded by [ADR 0020](0020-authentication-implementation.md) (M9 added real logins)
 - **Date:** 2026-10-07
 
 ## Context

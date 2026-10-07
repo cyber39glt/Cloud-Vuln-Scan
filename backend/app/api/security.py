@@ -3,15 +3,18 @@
 - Only known host names are served (TrustedHostMiddleware, configured in main.py):
   blocks DNS rebinding, where a malicious web page makes your browser talk to the
   API on 127.0.0.1.
-- Requests that change data must be JSON. Browsers can send "simple" cross-site form
-  posts without asking permission; they cannot send JSON cross-site without a CORS
-  preflight, which this API never approves. This stops cross-site request forgery.
+- Cross-site request forgery is blocked three ways: the session cookie is
+  SameSite=Strict (never sent with requests started by another site); every POST
+  must be JSON (browsers can send "simple" cross-site form posts, but not JSON
+  without a CORS preflight, which this API never approves); and a request carrying an
+  Origin header from an unknown host is refused.
 - Every response carries headers telling browsers not to cache, sniff or frame it.
 - Errors never reveal internals: validation errors do not echo the submitted input,
   and unexpected errors return a generic message (details go to the server log).
 """
 
 import logging
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -19,12 +22,17 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from app.storage.repository import IntegrityViolation, NotFoundError
 
 logger = logging.getLogger(__name__)
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+# POST is the only changing method a browser sends cross-site without a CORS
+# preflight, so every POST must be JSON (send {} when there is nothing to say).
+# PUT, PATCH and DELETE always need a preflight, which this API never approves.
+JSON_METHODS = frozenset({"POST"})
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -38,12 +46,24 @@ _DOCS_PATHS = ("/docs", "/openapi.json")
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp, allowed_hosts: list[str]) -> None:
+        super().__init__(app)
+        self.allowed_hosts = {h.lower() for h in allowed_hosts}
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method in UNSAFE_METHODS:
+            origin = request.headers.get("origin")
+            if origin is not None and (urlsplit(origin).hostname or "") not in self.allowed_hosts:
+                return JSONResponse(
+                    {"detail": "Cross-site requests are not allowed."},
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    headers=SECURITY_HEADERS,
+                )
+        if request.method in JSON_METHODS:
             content_type = request.headers.get("content-type", "").split(";")[0].strip()
             if content_type.lower() != "application/json":
                 return JSONResponse(
-                    {"detail": "Requests that change data must be sent as application/json."},
+                    {"detail": "POST requests must be application/json (send {} if empty)."},
                     status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                     headers=SECURITY_HEADERS,
                 )

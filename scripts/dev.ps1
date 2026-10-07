@@ -15,7 +15,7 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
                  "secrets", "check", "build", "reset", "demo", "aws", "migrate",
-                 "clients", "assessments", "azure")]
+                 "clients", "assessments", "azure", "users")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -54,6 +54,16 @@ function Initialize-EnvFile {
     if (-not (Test-Path $envFile)) {
         Copy-Item (Join-Path $RepoRoot ".env.example") $envFile
         Write-Host "Created .env from .env.example (local development values)." -ForegroundColor Yellow
+    }
+    # Give this machine its own random APP_SECRET_KEY (encrypts MFA secrets) once.
+    $content = Get-Content $envFile -Raw
+    if ($content -notmatch "(?m)^APP_SECRET_KEY=\S+") {
+        $bytes = New-Object byte[] 48
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $key = [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+        $content = $content -replace "(?m)^APP_SECRET_KEY=.*\r?\n?", ""
+        Set-Content -Path $envFile -Value ($content.TrimEnd() + "`nAPP_SECRET_KEY=$key`n") -NoNewline
+        Write-Host "Generated a random APP_SECRET_KEY in .env (keep it; do not share it)." -ForegroundColor Yellow
     }
 }
 
@@ -94,6 +104,11 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
               azure connect --client "Acme Ltd" --tenant-id <guid> --subscription-id <guid>
               azure validate --client "Acme Ltd" --subscription-id <guid>
               azure scan --client "Acme Ltd" --subscription-id <guid> [--regions uksouth]
+  users     User accounts (run on the server), e.g.:
+              users create --admin --email you@example.com --name "Your Name"
+              users list
+              users reset-mfa --email someone@example.com       (lost phone)
+              users reset-password --email someone@example.com  (forgotten / locked)
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready
@@ -147,7 +162,7 @@ try {
             Invoke-Migrations
         }
         "migrate" { Invoke-Migrations }
-        { $_ -in "clients", "assessments", "azure" } {
+        { $_ -in "clients", "assessments", "azure", "users" } {
             Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.cli", $Command) + $ExtraArgs)
         }
         "status"  { Invoke-Compose @("ps") }

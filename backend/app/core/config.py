@@ -17,6 +17,10 @@ Environment = Literal["development", "test", "production"]
 # Placeholder passwords from .env.example must never reach production.
 _PLACEHOLDER_PREFIX = "change-me"
 _MIN_PRODUCTION_PASSWORD_LENGTH = 16
+_MIN_SECRET_KEY_LENGTH = 32
+# Used ONLY when APP_SECRET_KEY is empty outside production, so a fresh checkout works.
+# Production refuses to start without a real key (see _check_production_safety).
+_DEVELOPMENT_SECRET_KEY = "insecure-development-only-key-never-use-in-production"  # noqa: S105
 
 
 class Settings(BaseSettings):
@@ -69,6 +73,21 @@ class Settings(BaseSettings):
     # A running scan whose heartbeat is older than this is treated as interrupted.
     worker_stale_after_seconds: int = Field(default=900, ge=120, le=86400)
 
+    # Authentication (M9, ADR 0009/0020).
+    # Encrypts MFA (TOTP) secrets at rest. Any long random string; generate one with
+    # .\scripts\dev.ps1 up (done automatically) or `python -c "import secrets;
+    # print(secrets.token_urlsafe(48))"`. Changing it invalidates every enrolled MFA.
+    app_secret_key: SecretStr = SecretStr("")
+    session_idle_minutes: int = Field(default=30, ge=5, le=480)
+    session_absolute_hours: int = Field(default=12, ge=1, le=24)
+    # Time allowed between entering the password and the MFA code.
+    session_pending_mfa_minutes: int = Field(default=5, ge=1, le=15)
+    # Cookies are always "Secure" (HTTPS only) in production. Development over plain
+    # http://localhost may turn it off.
+    session_cookie_secure: bool = True
+    max_failed_logins: int = Field(default=5, ge=3, le=20)
+    lockout_minutes: int = Field(default=15, ge=1, le=1440)
+
     # Host names the API answers to. Anything else is rejected, which stops "DNS
     # rebinding" (a web page tricking your browser into calling the local API).
     api_allowed_hosts: list[str] = ["localhost", "127.0.0.1"]
@@ -76,6 +95,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def secret_key(self) -> str:
+        return self.app_secret_key.get_secret_value() or _DEVELOPMENT_SECRET_KEY
 
     @property
     def database_url(self) -> URL:
@@ -105,6 +128,14 @@ class Settings(BaseSettings):
                 )
             if self.log_level == "DEBUG":
                 raise ValueError("LOG_LEVEL=DEBUG is not allowed in production")
+            key = self.app_secret_key.get_secret_value()
+            if len(key) < _MIN_SECRET_KEY_LENGTH or key.startswith(_PLACEHOLDER_PREFIX):
+                raise ValueError(
+                    f"APP_SECRET_KEY must be a random secret of at least "
+                    f"{_MIN_SECRET_KEY_LENGTH} characters in production"
+                )
+            if not self.session_cookie_secure:
+                raise ValueError("SESSION_COOKIE_SECURE must be true in production")
         return self
 
 

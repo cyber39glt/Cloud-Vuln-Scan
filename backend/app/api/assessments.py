@@ -2,10 +2,11 @@
 
 import re
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from app.api.deps import ClientScope, DbSession
+from app.api.deps import ClientScope, CurrentUser, DbSession, client_ip
 from app.api.schemas import (
     AssessmentCreate,
     AssessmentDetail,
@@ -14,6 +15,7 @@ from app.api.schemas import (
     ScanRequest,
     ScanRunOut,
 )
+from app.auth import audit
 from app.core.config import get_settings
 from app.reporting.exports import to_csv
 from app.reporting.report import AssessmentReport, report_for_scan
@@ -22,6 +24,8 @@ from app.storage import repository as repo
 
 router = APIRouter(prefix="/api/v1/clients/{client_id}", tags=["assessments"])
 
+Ip = Annotated[str | None, Depends(client_ip)]
+
 
 @router.get("/assessments")
 def list_assessments(client: ClientScope, db: DbSession) -> list[AssessmentOut]:
@@ -29,15 +33,25 @@ def list_assessments(client: ClientScope, db: DbSession) -> list[AssessmentOut]:
 
 
 @router.post("/assessments", status_code=status.HTTP_201_CREATED)
-def create_assessment(body: AssessmentCreate, client: ClientScope, db: DbSession) -> AssessmentOut:
+def create_assessment(
+    body: AssessmentCreate, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> AssessmentOut:
     connection = repo.get_connection_by_id(db, client.id, body.connection_id)
     if repo.find_assessment_by_name(db, client.id, connection.id, body.name):
         raise HTTPException(
             status.HTTP_409_CONFLICT, "This connection already has an assessment with this name."
         )
-    return AssessmentOut.model_validate(
-        repo.create_assessment(db, client.id, connection.id, body.name)
+    assessment = repo.create_assessment(db, client.id, connection.id, body.name)
+    audit.record(
+        db,
+        "assessment.created",
+        user.actor,
+        client_id=client.id,
+        target_type="assessment",
+        target_id=assessment.id,
+        ip_address=ip,
     )
+    return AssessmentOut.model_validate(assessment)
 
 
 @router.get("/assessments/{assessment_id}")
@@ -73,6 +87,8 @@ def request_scan(
     body: ScanRequest,
     client: ClientScope,
     db: DbSession,
+    user: CurrentUser,
+    ip: Ip,
     response: Response,
 ) -> ScanJobOut:
     """Queue a read-only scan of the assessment's cloud account. Returns at once
@@ -81,6 +97,17 @@ def request_scan(
         job = jobs.enqueue_scan(db, client.id, assessment_id, body.regions)
     except jobs.ScanNotAllowed as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    audit.record(
+        db,
+        "scan.requested",
+        user.actor,
+        client_id=client.id,
+        target_type="scan_job",
+        target_id=job.id,
+        ip_address=ip,
+        assessment_id=str(assessment_id),
+        regions=body.regions,
+    )
     response.headers["Location"] = f"/api/v1/clients/{client.id}/scan-jobs/{job.id}"
     return ScanJobOut.model_validate(job)
 
@@ -102,14 +129,39 @@ def get_scan_job(job_id: uuid.UUID, client: ClientScope, db: DbSession) -> ScanJ
 
 
 @router.get("/scans/{scan_id}/report")
-def get_report(scan_id: uuid.UUID, client: ClientScope, db: DbSession) -> AssessmentReport:
+def get_report(
+    scan_id: uuid.UUID, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> AssessmentReport:
     """The report dataset (same as the JSON export), integrity-checked on every read."""
-    return report_for_scan(db, client.id, scan_id, get_settings().consultancy_name)
+    report = report_for_scan(db, client.id, scan_id, get_settings().consultancy_name)
+    audit.record(
+        db,
+        "report.viewed",
+        user.actor,
+        client_id=client.id,
+        target_type="scan_run",
+        target_id=scan_id,
+        ip_address=ip,
+        format="json",
+    )
+    return report
 
 
 @router.get("/scans/{scan_id}/report.csv", response_class=Response)
-def get_report_csv(scan_id: uuid.UUID, client: ClientScope, db: DbSession) -> Response:
+def get_report_csv(
+    scan_id: uuid.UUID, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> Response:
     report = report_for_scan(db, client.id, scan_id, get_settings().consultancy_name)
+    audit.record(
+        db,
+        "report.exported",
+        user.actor,
+        client_id=client.id,
+        target_type="scan_run",
+        target_id=scan_id,
+        ip_address=ip,
+        format="csv",
+    )
     # File names use safe characters only: client names are free text.
     slug = re.sub(r"[^A-Za-z0-9]+", "-", client.name).strip("-").lower()[:40] or "client"
     return Response(

@@ -56,12 +56,42 @@ def test_production_rejects_debug_logging():
         )
 
 
+STRONG_KEY = "k" * 16 + "a-long-random-production-key"  # gitleaks:allow  (test-only)
+
+
 def test_production_accepts_strong_configuration():
     settings = make_settings(
-        app_env="production", postgres_password="a-long-random-production-secret"
+        app_env="production",
+        postgres_password="a-long-random-production-secret",
+        app_secret_key=STRONG_KEY,
     )
 
     assert settings.is_production
+    assert settings.secret_key == STRONG_KEY
+
+
+@pytest.mark.parametrize("key", ["", "too-short", "change-me" + "x" * 40])
+def test_production_requires_a_real_secret_key(key):
+    with pytest.raises(ValidationError, match="APP_SECRET_KEY"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            app_secret_key=key,
+        )
+
+
+def test_production_requires_secure_cookies():
+    with pytest.raises(ValidationError, match="SESSION_COOKIE_SECURE"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            app_secret_key=STRONG_KEY,
+            session_cookie_secure=False,
+        )
+
+
+def test_development_falls_back_to_a_marked_development_key():
+    assert "development-only" in make_settings(app_env="development").secret_key
 
 
 def test_rejects_unknown_environment():

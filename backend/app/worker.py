@@ -28,6 +28,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth import audit
 from app.core.config import Settings, get_settings
 from app.core.database import get_sessionmaker
 from app.core.logging import configure_logging
@@ -172,6 +173,15 @@ def run_job(
             # both are stored or neither is.
             scan_run = repo.save_scan_result(session, client_id, assessment_id, result)
             jobs.complete_job(session, session.get(ScanJob, job_id), scan_run.id)
+            audit.record(
+                session,
+                "scan.completed",
+                audit.SYSTEM,
+                client_id=client_id,
+                target_type="scan_run",
+                target_id=scan_run.id,
+                findings=len(result.findings),
+            )
         logger.info(
             "scan succeeded",
             extra=log | {"scan_run_id": str(scan_run.id), "findings": len(result.findings)},
@@ -182,6 +192,17 @@ def run_job(
         logger.log(level, "scan failed", extra=log | {"error_code": code})
         with factory.begin() as session:
             jobs.fail_job(session, job_id, code, message)
+            job = session.get(ScanJob, job_id)
+            audit.record(
+                session,
+                "scan.failed",
+                audit.SYSTEM,
+                outcome="failure",
+                client_id=job.client_id if job else None,
+                target_type="scan_job",
+                target_id=job_id,
+                error_code=code,
+            )
 
 
 def work_once(

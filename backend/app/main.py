@@ -8,7 +8,7 @@ import logging
 from fastapi import FastAPI
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import assessments, clients, health
+from app.api import admin, assessments, auth, clients, health
 from app.api.security import SecurityMiddleware, install_error_handlers
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -33,11 +33,13 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if docs_enabled else None,
     )
     # Middleware runs outermost-last-added: the host check happens first.
-    application.add_middleware(SecurityMiddleware)
+    application.add_middleware(SecurityMiddleware, allowed_hosts=settings.api_allowed_hosts)
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.api_allowed_hosts)
     install_error_handlers(application)
 
     application.include_router(health.router)
+    application.include_router(auth.router)
+    application.include_router(admin.router)
     application.include_router(clients.router)
     application.include_router(assessments.router)
 
