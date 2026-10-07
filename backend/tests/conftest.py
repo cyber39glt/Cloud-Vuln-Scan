@@ -1,6 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
+from moto import mock_aws
 
+from app.core.config import Settings
 from app.core.database import build_engine, get_engine
 from app.main import app
 
@@ -25,3 +27,19 @@ def unreachable_database():
     app.dependency_overrides[get_engine] = lambda: engine
     yield
     engine.dispose()
+
+
+@pytest.fixture
+def settings() -> Settings:
+    """Default settings, ignoring any local .env file."""
+    return Settings(_env_file=None)
+
+
+@pytest.fixture
+def aws(monkeypatch):
+    """Fake platform credentials + simulated AWS (moto). No real AWS is contacted."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    with mock_aws():
+        yield

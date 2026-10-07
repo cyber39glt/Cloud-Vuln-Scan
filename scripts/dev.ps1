@@ -76,9 +76,10 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   check     lint + test + secrets (what CI runs)
   build     Build the production image ($ProdImage)
   demo      Run the rule engine on sample data (add -json for the full dataset)
-  aws       AWS connection tools, e.g.:
+  aws       AWS connection and assessment tools, e.g.:
               aws external-id
               aws validate --account-id 123456789012 --external-id <id>
+              aws scan --account-id 123456789012 --external-id <id> [--regions eu-west-2] [--json]
   reset     Stop everything AND delete the local database (asks first)
 
 After 'up':  http://localhost:8000/health   http://localhost:8000/health/ready

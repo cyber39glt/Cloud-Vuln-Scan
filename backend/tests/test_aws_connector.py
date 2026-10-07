@@ -8,7 +8,6 @@ import boto3
 import botocore.session
 import pytest
 from botocore.exceptions import ClientError
-from moto import mock_aws
 
 from app.cli import main as cli_main
 from app.core.config import Settings
@@ -34,21 +33,6 @@ from app.rules.registry import ALL_RULES
 
 MOTO_ACCOUNT = "123456789012"  # moto's default account
 EXTERNAL_ID = "subtletech-test-external-id"
-
-
-@pytest.fixture
-def settings() -> Settings:
-    return Settings(_env_file=None)
-
-
-@pytest.fixture
-def aws(monkeypatch):
-    """Fake platform credentials + simulated AWS."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
-    monkeypatch.delenv("AWS_PROFILE", raising=False)
-    with mock_aws():
-        yield
 
 
 def connection(account_id: str = MOTO_ACCOUNT) -> AwsConnection:

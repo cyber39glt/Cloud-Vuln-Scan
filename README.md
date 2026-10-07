@@ -6,9 +6,9 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M2, AWS connector).**
-> The rule engine runs on sample data and AWS connections can be validated. Resource
-> collection, user accounts and the dashboard are not built yet.
+> **Status: early development (milestone M3, AWS scanning).**
+> AWS accounts can be assessed from the command line. Azure, storage of results,
+> user accounts, the dashboard and reports are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -89,6 +89,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset) |
 | `aws external-id` | Generate an ExternalId for a client connection |
 | `aws validate --account-id <id> --external-id <id>` | Check an AWS connection works and is read-only ([guide](docs/aws-connection.md)) |
+| `aws scan --account-id <id> --external-id <id> [--regions r1,r2] [--json]` | Run a read-only AWS assessment and print the findings |
 | `reset` | Stop everything **and delete the local database** (asks first) |
 
 Code changes in `backend/` are picked up automatically while the app is running.
@@ -144,7 +145,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 ├── docs/
 │   ├── architecture.md      Architecture overview and roadmap
 │   └── decisions/           Architecture Decision Records (ADRs)
-├── infra/aws/               CloudFormation template clients deploy (read-only role)
+├── infra/aws/               CloudFormation: client read-only role; sandbox test fixtures
 ├── scripts/dev.ps1          Windows development commands
 ├── docker-compose.yml       Local environment: PostgreSQL + API
 ├── .env.example             Documented configuration template
