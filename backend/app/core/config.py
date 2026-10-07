@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     postgres_password: SecretStr = SecretStr("")
     db_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
 
+    # The consultancy operating the platform. Appears in client-facing names (the
+    # IAM role clients create, session names in their CloudTrail) and later reports.
+    consultancy_name: str = Field(default="SubtleTech", pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{1,30}$")
+
+    # AWS. The platform's OWN credentials are deliberately not settings: boto3 reads
+    # them from its standard sources (environment variables locally, workload
+    # identity when hosted), so this code never handles them (ADR 0005, ADR 0014).
+    aws_region: str = Field(default="us-east-1", pattern=r"^[a-z]{2}(-[a-z]+)+-\d$")
+    aws_assessment_role_name: str = Field(
+        default="SubtleTechSecurityAssessment", pattern=r"^[\w+=,.@-]{1,64}$"
+    )
+    aws_session_duration_seconds: int = Field(default=3600, ge=900, le=3600)
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

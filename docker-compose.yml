@@ -41,6 +41,8 @@ services:
     volumes:
       # Mount the source code so edits on your machine apply without rebuilding.
       - ./backend:/app
+      # Client onboarding templates, read-only (tests check them against settings).
+      - ./infra:/infra:ro
     ports:
       # 127.0.0.1 = only reachable from this computer, not from your network.
       - "127.0.0.1:${API_PORT:-8000}:8000"

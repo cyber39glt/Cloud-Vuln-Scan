@@ -6,9 +6,9 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M1, rule engine).**
-> The rule engine runs on sample data. There are no cloud connectors, user accounts
-> or dashboard yet.
+> **Status: early development (milestone M2, AWS connector).**
+> The rule engine runs on sample data and AWS connections can be validated. Resource
+> collection, user accounts and the dashboard are not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -87,6 +87,8 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `check` | `lint` + `test` + `secrets`: the same checks CI runs |
 | `build` | Build the production image `cloud-vuln-scan-api:local` |
 | `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset) |
+| `aws external-id` | Generate an ExternalId for a client connection |
+| `aws validate --account-id <id> --external-id <id>` | Check an AWS connection works and is read-only ([guide](docs/aws-connection.md)) |
 | `reset` | Stop everything **and delete the local database** (asks first) |
 
 Code changes in `backend/` are picked up automatically while the app is running.
@@ -133,7 +135,8 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   │   ├── core/            Configuration, logging, database
 │   │   ├── domain/          Inventory, findings and evidence models
 │   │   ├── rules/           Security rules and the rule engine
-│   │   └── frameworks/      CIS / NIST CSF / SOC 2 mappings
+│   │   ├── frameworks/      CIS / NIST CSF / SOC 2 mappings
+│   │   └── providers/aws/   AWS connector: read-only guard, AssumeRole, validation
 │   ├── tests/               pytest tests
 │   ├── Dockerfile           dev and prod container images
 │   ├── pyproject.toml       Dependencies and tool settings
@@ -141,6 +144,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 ├── docs/
 │   ├── architecture.md      Architecture overview and roadmap
 │   └── decisions/           Architecture Decision Records (ADRs)
+├── infra/aws/               CloudFormation template clients deploy (read-only role)
 ├── scripts/dev.ps1          Windows development commands
 ├── docker-compose.yml       Local environment: PostgreSQL + API
 ├── .env.example             Documented configuration template
@@ -152,6 +156,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [Architecture overview](docs/architecture.md)
 - [Architecture decisions](docs/decisions/)
 - [Writing a security rule](docs/rules.md)
+- [AWS connection and sandbox testing](docs/aws-connection.md)
 - [Security policy](SECURITY.md)
 
 ## License
