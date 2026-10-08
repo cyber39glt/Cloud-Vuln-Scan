@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Development commands for Cloud Vuln Scan (Windows PowerShell 5.1+ or PowerShell 7).
+    Development commands for CloudSecura (Windows PowerShell 5.1+ or PowerShell 7).
 
 .DESCRIPTION
     Wraps the Docker commands you need day to day, so you do not have to remember them.

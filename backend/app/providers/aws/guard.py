@@ -94,7 +94,7 @@ def install_guard(session: boto3.Session, allowed: Iterable[str]) -> boto3.Sessi
             raise ReadOnlyViolation(f"Blocked by read-only guard: {operation} is not allowed.")
 
     session.events.register(
-        "before-parameter-build", check, unique_id="cloud-vuln-scan-read-only-guard"
+        "before-parameter-build", check, unique_id="cloudsecura-read-only-guard"
     )
     return session
 
