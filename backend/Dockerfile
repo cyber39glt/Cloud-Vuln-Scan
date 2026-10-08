@@ -22,6 +22,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
+# System libraries for PDF reports (WeasyPrint: Pango text layout) and one font
+# family, so reports look the same on every machine.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # uv: the package manager that installs the exact versions pinned in uv.lock.
 RUN pip install --no-cache-dir uv==0.12.22
 
@@ -38,6 +44,8 @@ FROM base AS dev
 RUN uv sync --frozen --no-install-project
 
 COPY . .
+# The non-root user has no home directory: font caches (PDF reports) go to /tmp.
+ENV XDG_CACHE_HOME=/tmp/app-cache
 USER app
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -52,6 +60,8 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 # The dashboard, served by the API at / (settings.web_dist_dir).
 COPY --from=web /web/dist ./web
+# The non-root user has no home directory: font caches (PDF reports) go to /tmp.
+ENV XDG_CACHE_HOME=/tmp/app-cache
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

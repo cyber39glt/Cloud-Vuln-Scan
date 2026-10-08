@@ -54,6 +54,9 @@ export function ReportPage() {
         }
         actions={
           <>
+            <button className="btn btn-primary" disabled={downloads.busy} onClick={() => void downloads.run(() => download(`${path}.pdf`, `${name}.pdf`))}>
+              {downloads.busy ? "Preparing…" : "Download PDF report"}
+            </button>
             <button className="btn" disabled={downloads.busy} onClick={() => void downloads.run(() => download(`${path}.csv`, `${name}.csv`))}>
               Download CSV
             </button>

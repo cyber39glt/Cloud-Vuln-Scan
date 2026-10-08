@@ -2,11 +2,13 @@
 
 import re
 import uuid
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import ClientScope, CurrentUser, DbSession, client_ip
+from app.api.deps import ClientScope, CurrentUser, DbSession, Principal, client_ip
 from app.api.schemas import (
     AssessmentCreate,
     AssessmentDetail,
@@ -18,9 +20,11 @@ from app.api.schemas import (
 from app.auth import audit
 from app.core.config import get_settings
 from app.reporting.exports import to_csv
+from app.reporting.pdf import to_pdf
 from app.reporting.report import AssessmentReport, report_for_scan
 from app.storage import jobs
 from app.storage import repository as repo
+from app.storage.models import Client
 
 router = APIRouter(prefix="/api/v1/clients/{client_id}", tags=["assessments"])
 
@@ -147,10 +151,17 @@ def get_report(
     return report
 
 
-@router.get("/scans/{scan_id}/report.csv", response_class=Response)
-def get_report_csv(
-    scan_id: uuid.UUID, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+def _export(
+    scan_id: uuid.UUID,
+    client: Client,
+    db: Session,
+    user: Principal,
+    ip: str | None,
+    extension: str,
+    media_type: str,
+    render: Callable[[AssessmentReport], bytes],
 ) -> Response:
+    """A downloadable report file (CSV or PDF), audit-logged as an export."""
     report = report_for_scan(db, client.id, scan_id, get_settings().consultancy_name)
     audit.record(
         db,
@@ -160,12 +171,29 @@ def get_report_csv(
         target_type="scan_run",
         target_id=scan_id,
         ip_address=ip,
-        format="csv",
+        format=extension,
     )
     # File names use safe characters only: client names are free text.
     slug = re.sub(r"[^A-Za-z0-9]+", "-", client.name).strip("-").lower()[:40] or "client"
     return Response(
-        content=to_csv(report),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{slug}_{str(scan_id)[:8]}.csv"'},
+        content=render(report),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{slug}_{str(scan_id)[:8]}.{extension}"'
+        },
     )
+
+
+@router.get("/scans/{scan_id}/report.csv", response_class=Response)
+def get_report_csv(
+    scan_id: uuid.UUID, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> Response:
+    return _export(scan_id, client, db, user, ip, "csv", "text/csv; charset=utf-8", to_csv)
+
+
+@router.get("/scans/{scan_id}/report.pdf", response_class=Response)
+def get_report_pdf(
+    scan_id: uuid.UUID, client: ClientScope, db: DbSession, user: CurrentUser, ip: Ip
+) -> Response:
+    """The client-facing PDF report, from the same dataset as every other output."""
+    return _export(scan_id, client, db, user, ip, "pdf", "application/pdf", to_pdf)

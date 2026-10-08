@@ -6,12 +6,12 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M10, web dashboard).**
+> **Status: early development (milestone M11, PDF reports).**
 > Consultants log in to a web dashboard (password + authenticator app), register client
 > AWS accounts and Azure subscriptions, run read-only scans with live progress (19
 > rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
-> exportable as CSV/JSON. Admins manage users, client assignments and the audit log.
-> PDF reports and the finding review workflow are not built yet.
+> downloadable as a client-ready PDF report, CSV or JSON. Admins manage users, client
+> assignments and the audit log. The finding review workflow is not built yet.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
@@ -102,7 +102,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `aws scan --client "Acme Ltd" --account-id <id> [--assessment NAME] [--regions r1,r2] [--json]` | Run a read-only AWS assessment and **save** it |
 | `aws scan --account-id <id> --external-id <id>` | One-off scan, printed only (not saved) |
 | `assessments list --client "Acme Ltd"` / `assessments show --client ... --scan <id>` | View saved assessments and scans |
-| `assessments export --client ... --scan <id> [--format json\|csv\|all]` | Write JSON/CSV reports to `backend\exports\` ([details](docs/exports.md)) |
+| `assessments export --client ... --scan <id> [--format pdf\|json\|csv\|all]` | Write PDF/JSON/CSV reports to `backend\exports\` ([details](docs/exports.md)) |
 | `azure connect --client ... --tenant-id <guid> --subscription-id <guid>` | Register a client's Azure subscription and print onboarding steps |
 | `azure validate --client ... --subscription-id <guid>` | Check an Azure connection works and is read-only ([guide](docs/azure-connection.md)) |
 | `azure scan --client ... --subscription-id <guid> [--assessment NAME] [--regions r1,r2] [--json]` | Run a read-only Azure assessment and **save** it |
@@ -166,7 +166,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   │   ├── providers/aws/   AWS connector: read-only guard, AssumeRole, collectors
 │   │   ├── providers/azure/ Azure connector: pipeline guard, validation, collectors
 │   │   ├── storage/         Database models and client-scoped data access
-│   │   └── reporting/       Report dataset + JSON/CSV exports
+│   │   └── reporting/       Report dataset + PDF (templates/), JSON and CSV exports
 │   ├── schemas/             Published JSON Schema of the JSON export
 │   ├── migrations/          Alembic database migrations
 │   ├── tests/               pytest tests
@@ -196,7 +196,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [AWS connection and sandbox testing](docs/aws-connection.md)
 - [Azure connection and sandbox testing](docs/azure-connection.md)
 - [Data model](docs/data-model.md)
-- [Report exports (JSON/CSV)](docs/exports.md)
+- [Report exports (PDF/JSON/CSV)](docs/exports.md)
 - [Using the dashboard](docs/dashboard.md)
 - [User accounts and logging in](docs/users.md)
 - [Using the API](docs/api.md)

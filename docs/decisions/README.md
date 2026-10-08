@@ -27,5 +27,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0019](0019-api-worker-and-pre-auth-boundary.md) | Data API, scan worker, and the boundary before user authentication | Accepted (partly superseded by 0020) |
 | [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted |
 | [0021](0021-dashboard.md) | Dashboard: same-origin React app with a strict Content-Security-Policy | Accepted |
+| [0022](0022-pdf-reports.md) | PDF reports: WeasyPrint with escaped templates and no resource fetching | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.
