@@ -91,6 +91,14 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### Dashboard redesign and onboarding
+
+- Public showcase page for visitors (features and checks, no client data), new sidebar
+  layout with dark/light themes and dashboard charts, @cyber39glt in the footer.
+- First-run setup in the browser (needs a setup code from the server) and one-time
+  invitation links instead of temporary passwords; still no public sign-up
+  ([ADR 0024](decisions/0024-onboarding-and-public-showcase.md)).
+
 ### M12: finding review and finalization
 
 - Each finding can be confirmed, marked a false positive or an accepted risk, and given

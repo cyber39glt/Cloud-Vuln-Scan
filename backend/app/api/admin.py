@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, DbSession, client_ip
-from app.auth import service
+from app.api.deps import AdminUser, AppSettings, DbSession, client_ip
+from app.auth import onboarding, service
 from app.storage import repository as repo
-from app.storage.models import AuditEvent, Role, User
+from app.storage.models import AuditEvent, Role, User, UserInvite
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -60,6 +60,34 @@ class TemporaryPasswordOut(BaseModel):
     note: str = (
         "Give this password to the user through a separate, secure channel. It is shown "
         "only once; the user must change it and set up MFA at first login."
+    )
+
+
+class InviteCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: Email
+    display_name: DisplayName
+    role: Role
+
+
+class InviteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    email: str
+    display_name: str
+    role: Role
+    created_by: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class InviteCreated(BaseModel):
+    invite: InviteOut
+    # Shown once. The dashboard turns it into the link: <site>/invite#<token>
+    token: str
+    note: str = (
+        "Send the link to this person through a channel you trust. It works once and "
+        "expires; only its hash is stored, so it cannot be shown again."
     )
 
 
@@ -192,3 +220,36 @@ def list_audit_events(
     if action is not None:
         query = query.where(AuditEvent.action == action)
     return [AuditEventOut.model_validate(e) for e in db.scalars(query)]
+
+
+# ------------------------------------------------------------------ invitations (ADR 0024)
+
+
+@router.get("/invites")
+def list_invites(admin: AdminUser, db: DbSession) -> list[InviteOut]:
+    del admin
+    return [InviteOut.model_validate(i) for i in onboarding.pending_invites(db)]
+
+
+@router.post("/invites", status_code=status.HTTP_201_CREATED)
+def create_invite(
+    body: InviteCreate, admin: AdminUser, db: DbSession, settings: AppSettings, ip: Ip
+) -> InviteCreated:
+    try:
+        invite, token = onboarding.create_invite(
+            db, body.email, body.display_name, body.role, admin.actor, settings, ip
+        )
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return InviteCreated(invite=InviteOut.model_validate(invite), token=token)
+
+
+@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invite(invite_id: uuid.UUID, admin: AdminUser, db: DbSession, ip: Ip) -> None:
+    invite = db.get(UserInvite, invite_id)
+    if invite is None:
+        raise repo.NotFoundError("invite not found")
+    try:
+        onboarding.revoke_invite(db, invite, admin.actor, ip)
+    except service.AccountError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

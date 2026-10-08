@@ -6,7 +6,7 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M12, finding review).**
+> **Status: early development (milestone M12, finding review; new dashboard design).**
 > Consultants log in to a web dashboard (password + authenticator app), register client
 > AWS accounts and Azure subscriptions, run read-only scans with live progress (19
 > rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
@@ -58,12 +58,13 @@ creates your local `.env` file from `.env.example`.
 ### 4. Create your account and open the dashboard
 
 ```powershell
-.\scripts\dev.ps1 users create --admin --email you@yourcompany.com --name "Your Name"
+.\scripts\dev.ps1 users setup-code
 ```
 
-It prints a one-time temporary password. Open **http://localhost:5173**, log in, set up
-your authenticator app (scan the QR code) and choose your own password.
-See [the dashboard guide](docs/dashboard.md).
+It prints a one-time setup code. Open **http://localhost:5173**, click **Set up this
+installation**, enter the code and your details, then set up your authenticator app
+(scan the QR code). Invite colleagues from the **Users** page.
+See [users.md](docs/users.md) and [the dashboard guide](docs/dashboard.md).
 
 Health checks: http://localhost:8000/health and http://localhost:8000/health/ready.
 Interactive API docs (development only): http://localhost:8000/docs
@@ -95,7 +96,8 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `check` | `lint` + `test` + `webtest` + `secrets`: the same checks CI runs |
 | `build` | Build the production image `cloud-vuln-scan-api:local` (API + worker + built dashboard) |
 | `demo` | Run the rule engine on sample AWS + Azure data (`demo -json` for the full dataset; `demo -save "Demo Client"` stores it to try exports) |
-| `users create --admin --email ... --name ...` | Create the first administrator (prints a one-time temporary password; [guide](docs/users.md)) |
+| `users setup-code` | Show the code for the dashboard's first-run setup page (works only while there are no users) |
+| `users create --admin --email ... --name ...` | Create an administrator on the command line instead (prints a one-time temporary password; [guide](docs/users.md)) |
 | `users list` / `users reset-mfa --email ...` / `users reset-password --email ...` | List accounts; recover a lost authenticator or a forgotten/locked password |
 | `aws external-id` | Generate an ExternalId for a client connection |
 | `aws validate --account-id <id> --external-id <id>` | Check an AWS connection works and is read-only ([guide](docs/aws-connection.md)) |

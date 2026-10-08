@@ -86,7 +86,7 @@ class MeOut(BaseModel):
     consultancy: str
 
 
-def _set_cookie(response: Response, token: str, settings: Settings) -> None:
+def set_session_cookie(response: Response, token: str, settings: Settings) -> None:
     response.set_cookie(
         auth_sessions.cookie_name(settings),
         token,
@@ -107,7 +107,7 @@ def _clear_cookie(response: Response, settings: Settings) -> None:
     )
 
 
-def _error(status_code: int, detail: str) -> JSONResponse:
+def error_response(status_code: int, detail: str) -> JSONResponse:
     return JSONResponse({"detail": detail}, status_code=status_code)
 
 
@@ -128,28 +128,30 @@ def _me(principal: Principal, settings: Settings) -> MeOut:
 def login(body: LoginRequest, db: DbSession, settings: AppSettings, ip: Ip) -> Response:
     if not login_limiter.allow(ip or "unknown"):
         audit.record(db, "auth.rate_limited", audit.ANONYMOUS, outcome="denied", ip_address=ip)
-        return _error(status.HTTP_429_TOO_MANY_REQUESTS, "Too many attempts. Try again later.")
+        return error_response(
+            status.HTTP_429_TOO_MANY_REQUESTS, "Too many attempts. Try again later."
+        )
     user = service.authenticate(db, body.email, body.password, settings, ip)
     if user is None:
-        return _error(status.HTTP_401_UNAUTHORIZED, service.GENERIC_LOGIN_ERROR)
+        return error_response(status.HTTP_401_UNAUTHORIZED, service.GENERIC_LOGIN_ERROR)
     token = auth_sessions.create(db, user, mfa_verified=False, settings=settings)
     result = LoginResult(
         mfa_enrolled=user.mfa_enabled,
         next_step="mfa_verify" if user.mfa_enabled else "mfa_setup",
     )
     response = JSONResponse(result.model_dump())
-    _set_cookie(response, token, settings)
+    set_session_cookie(response, token, settings)
     return response
 
 
 @router.post("/mfa/setup")
 def mfa_setup(principal: AnySession, db: DbSession, settings: AppSettings, ip: Ip) -> Response:
     if principal.session.mfa_verified and principal.user.mfa_enabled:
-        return _error(status.HTTP_409_CONFLICT, "MFA is already set up.")
+        return error_response(status.HTTP_409_CONFLICT, "MFA is already set up.")
     try:
         setup = service.start_enrollment(db, principal.user, settings, ip)
     except service.AccountError as exc:
-        return _error(status.HTTP_409_CONFLICT, str(exc))
+        return error_response(status.HTTP_409_CONFLICT, str(exc))
     return JSONResponse(
         MfaSetupOut(secret=setup.secret, otpauth_uri=setup.otpauth_uri).model_dump()
     )
@@ -164,16 +166,18 @@ def mfa_activate(
             db, principal.session, principal.user, body.code, settings, ip
         )
     except service.AccountError as exc:
-        return _error(status.HTTP_409_CONFLICT, str(exc))
+        return error_response(status.HTTP_409_CONFLICT, str(exc))
     if codes is None:
-        return _error(status.HTTP_401_UNAUTHORIZED, "The code is not valid. Try the next one.")
+        return error_response(
+            status.HTTP_401_UNAUTHORIZED, "The code is not valid. Try the next one."
+        )
     service.finish_login(db, principal.user)
     token = auth_sessions.rotate(
         db, principal.session, principal.user, mfa_verified=True, settings=settings
     )
     audit.record(db, "auth.login", principal.actor, ip_address=ip)
     response = JSONResponse(RecoveryCodesOut(recovery_codes=codes).model_dump())
-    _set_cookie(response, token, settings)
+    set_session_cookie(response, token, settings)
     return response
 
 
@@ -182,7 +186,9 @@ def mfa_verify(
     body: VerifyRequest, principal: AnySession, db: DbSession, settings: AppSettings, ip: Ip
 ) -> Response:
     if (body.code is None) == (body.recovery_code is None):
-        return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "Send either code or recovery_code.")
+        return error_response(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Send either code or recovery_code."
+        )
     if principal.session.mfa_verified:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     ok = service.verify_second_factor(
@@ -195,14 +201,14 @@ def mfa_verify(
         recovery_code=body.recovery_code,
     )
     if not ok:
-        return _error(status.HTTP_401_UNAUTHORIZED, "The code is not valid.")
+        return error_response(status.HTTP_401_UNAUTHORIZED, "The code is not valid.")
     service.finish_login(db, principal.user)
     token = auth_sessions.rotate(
         db, principal.session, principal.user, mfa_verified=True, settings=settings
     )
     audit.record(db, "auth.login", principal.actor, ip_address=ip)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    _set_cookie(response, token, settings)
+    set_session_cookie(response, token, settings)
     return response
 
 
@@ -232,12 +238,12 @@ def change_password(
         db, principal.user, body.current_password, body.new_password, ip
     )
     if problem is not None:
-        return _error(status.HTTP_400_BAD_REQUEST, problem)
+        return error_response(status.HTTP_400_BAD_REQUEST, problem)
     # Every session of this user ends; this browser gets a fresh one.
     auth_sessions.revoke_all(db, principal.user.id)
     token = auth_sessions.create(db, principal.user, mfa_verified=True, settings=settings)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    _set_cookie(response, token, settings)
+    set_session_cookie(response, token, settings)
     return response
 
 
@@ -249,6 +255,6 @@ def new_recovery_codes(
     if not service.verify_second_factor(
         db, principal.session, principal.user, settings, ip, code=body.code
     ):
-        return _error(status.HTTP_401_UNAUTHORIZED, "The code is not valid.")
+        return error_response(status.HTTP_401_UNAUTHORIZED, "The code is not valid.")
     codes = service.regenerate_recovery_codes(db, principal.user, ip)
     return JSONResponse(RecoveryCodesOut(recovery_codes=codes).model_dump())

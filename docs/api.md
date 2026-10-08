@@ -43,7 +43,9 @@ Only one scan per assessment can be queued or running at a time. Watch the worke
 
 ## Rules the API enforces
 
-- You must be logged in (**401** otherwise). Consultants can use only the clients
+- You must be logged in (**401** otherwise), except for logging in, first-run setup
+  (`GET`/`POST /api/v1/setup`) and accepting an invitation
+  (`POST /api/v1/invites/lookup`, `/invites/accept`), which share the login rate limit. Consultants can use only the clients
   assigned to them; anything else is **404 Not found**, exactly like a record that
   does not exist. Admin-only actions return **403** to Consultants.
 - `POST` requests must be JSON (`Content-Type: application/json`; send `{}` when there

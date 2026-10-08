@@ -248,3 +248,26 @@ export interface AuditEvent {
   ip_address: string | null;
   details: Record<string, unknown>;
 }
+
+export interface InviteInfo {
+  email: string;
+  display_name: string;
+  role: Role;
+  consultancy: string;
+}
+
+export interface Invite {
+  id: string;
+  email: string;
+  display_name: string;
+  role: Role;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface InviteCreated {
+  invite: Invite;
+  token: string;
+  note: string;
+}

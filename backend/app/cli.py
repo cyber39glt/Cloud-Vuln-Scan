@@ -38,7 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from app.auth import audit
+from app.auth import audit, onboarding
 from app.auth import service as accounts
 from app.console import UNVERIFIED_NOTE, format_summary
 from app.core.config import get_settings
@@ -476,7 +476,10 @@ def _users_list(_: argparse.Namespace) -> int:
     def work(db: Session) -> int:
         users = list(db.scalars(select(User).order_by(User.email)))
         if not users:
-            print("No users yet. Create the first administrator with: users create --admin ...")
+            print(
+                "No users yet. Create the first administrator with: users create --admin ..."
+                " (or use the dashboard's setup page with: users setup-code)"
+            )
         for user in users:
             flags = [
                 user.role.value,
@@ -515,6 +518,21 @@ def _users_reset_password(args: argparse.Namespace) -> int:
         password = accounts.reset_password(db, user, audit.CLI)
         print(f"Password reset and account unlocked for {user.email}; sessions ended.")
         _print_temporary_password(user.email, password)
+        return 0
+
+    return _db(work)
+
+
+def _users_setup_code(_: argparse.Namespace) -> int:
+    """Show the code that unlocks the dashboard's first-run setup page (ADR 0024)."""
+
+    def work(db: Session) -> int:
+        if not onboarding.setup_needed(db):
+            print("Setup is already complete: users exist. Log in, or ask an administrator.")
+            return 0
+        print("First-run setup code (enter it on the dashboard's setup page):\n")
+        print(f"    {onboarding.setup_code(get_settings())}\n")
+        print("Keep it private. It stops working as soon as the first administrator exists.")
         return 0
 
     return _db(work)
@@ -594,6 +612,9 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("--admin", action="store_true", help="administrator (default: consultant)")
     create.set_defaults(handler=_users_create)
     users.add_parser("list", help="list users").set_defaults(handler=_users_list)
+    users.add_parser("setup-code", help="show the code for the first-run setup page").set_defaults(
+        handler=_users_setup_code
+    )
     for name, handler, help_text in (
         ("reset-mfa", _users_reset_mfa, "remove a user's MFA (lost phone)"),
         ("reset-password", _users_reset_password, "new temporary password; unlocks the account"),

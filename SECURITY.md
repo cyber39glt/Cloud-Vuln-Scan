@@ -60,6 +60,7 @@ remove it from history. Deleting the file is not enough; it remains in git histo
 
 | Control | How |
 |---|---|
+| Accounts | No public sign-up. First administrator via a one-time setup page that needs a code from the server (closed once any user exists); everyone else by single-use, expiring invitation links stored only as hashes ([ADR 0024](docs/decisions/0024-onboarding-and-public-showcase.md)) |
 | Passwords | Argon2id; 12+ characters; temporary passwords must be changed at first use |
 | MFA | Authenticator app (TOTP) mandatory for every user, no SMS; secrets encrypted at rest; codes single-use; hashed one-time recovery codes |
 | Sessions | Server-side; random token in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie, stored hashed; 30-minute idle / 12-hour absolute limit; ended on logout, password or MFA change, deactivation |

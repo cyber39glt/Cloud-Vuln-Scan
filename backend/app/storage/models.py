@@ -293,6 +293,38 @@ class User(Base):
     )
 
 
+class UserInvite(Base):
+    """A one-time invitation to create an account (ADR 0024). The link holds a random
+    token; only its SHA-256 hash is stored. An invite is pending until accepted,
+    revoked or expired."""
+
+    __tablename__ = "user_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    email: Mapped[str] = mapped_column(String(254))  # stored lower-case
+    display_name: Mapped[str] = mapped_column(String(200))
+    role: Mapped[Role] = mapped_column(_enum(Role, "user_role"))
+    created_by: Mapped[str] = mapped_column(String(254))
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("email = lower(email) AND length(email) > 3", name="email_normalized"),
+        CheckConstraint("length(trim(display_name)) > 0", name="display_name_not_blank"),
+        CheckConstraint("accepted_at IS NULL OR revoked_at IS NULL", name="accepted_or_revoked"),
+        Index("ix_user_invites_email", "email"),
+    )
+
+
 class RecoveryCode(Base):
     """One-time MFA recovery codes, stored only as SHA-256 hashes (the codes are long
     random values, so a fast hash is safe)."""

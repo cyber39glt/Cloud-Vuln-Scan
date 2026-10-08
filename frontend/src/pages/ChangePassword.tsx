@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { AuthShell } from "../components/AuthShell";
 import { ErrorBox, Field, Notice } from "../components/ui";
 import { useAction } from "../hooks";
 
@@ -59,14 +60,14 @@ export function ChangePasswordForm({ forced = false, onChanged }: { forced?: boo
 export function ForcedPasswordChangePage() {
   const { logout } = useAuth();
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
+    <AuthShell>
+      <div className="stack">
         <h1>Choose your password</h1>
         <ChangePasswordForm forced />
         <button className="btn-link" onClick={() => void logout()}>
           Log out
         </button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

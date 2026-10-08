@@ -7,6 +7,7 @@ How assessment data is stored. Decision record:
 users                        consultancy staff (Admin / Consultant), MFA, lockout
   ├─ user_sessions           login sessions (only token hashes stored)
   ├─ mfa_recovery_codes      one-time codes (hashed)
+  ├─ user_invites            one-time invitation links (token hashed)
   └─ client_assignments      which clients a Consultant may access
 audit_events                 append-only record of security-relevant actions
 
@@ -26,6 +27,7 @@ clients                      one row per consultancy client
 | `users` | `email` (unique, lower-case), `role`, `is_active`, `password_hash` (Argon2id), `mfa_enabled`, `mfa_secret_encrypted`, `failed_login_count`, `locked_until` | `auth_provider` / `external_subject` reserved for SSO ([ADR 0020](decisions/0020-authentication-implementation.md)) |
 | `user_sessions` | `token_hash`, `user_id`, `mfa_verified`, `last_seen_at`, `expires_at` | Deleted on logout, password/MFA change, deactivation |
 | `mfa_recovery_codes` | `user_id`, `code_hash`, `used_at` | Single use |
+| `user_invites` | `token_hash` (unique), `email`, `role`, `expires_at`, `accepted_at`, `revoked_at` | Pending until accepted, revoked or expired ([ADR 0024](decisions/0024-onboarding-and-public-showcase.md)) |
 | `client_assignments` | `user_id`, `client_id` | Consultant access; admins need none |
 | `audit_events` | `occurred_at`, `action`, `outcome`, `actor_*`, `client_id`, `target_*`, `ip_address`, `details` | **Append-only** (UPDATE/DELETE/TRUNCATE refused); no foreign keys so it outlives users and clients |
 | `clients` | `id`, `name` (unique, not blank) | |

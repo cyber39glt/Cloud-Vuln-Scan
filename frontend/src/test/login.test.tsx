@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../auth";
 import { LoginPage } from "../pages/Login";
@@ -32,9 +33,11 @@ describe("login", () => {
       return [204, undefined];
     });
     render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
     );
     fill("E-mail", "me@example.com");
     fill("Password", "a long passphrase");
@@ -53,9 +56,11 @@ describe("login", () => {
       return [401, { detail: "Invalid e-mail or password, or the account is temporarily locked." }];
     });
     render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
     );
     fill("E-mail", "me@example.com");
     fill("Password", "wrong");
@@ -76,9 +81,11 @@ describe("login", () => {
       return [204, undefined];
     });
     render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
     );
     fill("E-mail", "new@example.com");
     fill("Password", "temporary");

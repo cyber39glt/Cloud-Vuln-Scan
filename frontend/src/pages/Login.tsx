@@ -2,48 +2,39 @@ import QRCode from "qrcode";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { AuthShell } from "../components/AuthShell";
 import { ErrorBox, Field, Notice } from "../components/ui";
 import { useAction } from "../hooks";
 import type { LoginResult, MfaSetup, RecoveryCodes } from "../types";
 
-type Step = "password" | "mfa_verify" | "mfa_setup" | "recovery_codes";
+type Step = "password" | "mfa_verify" | "mfa_setup";
 
 /** Two-step login. MFA is mandatory: first-time users set up an authenticator here. */
 export function LoginPage() {
   const { refresh, sessionExpired } = useAuth();
   const [step, setStep] = useState<Step>("password");
-  const [codes, setCodes] = useState<string[]>([]);
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="brand brand-large">
-          <img src="/favicon.svg" alt="" width={32} height={32} />
-          <span>Cloud Vuln Scan</span>
-        </div>
-        {step === "password" && (
-          <>
-            {sessionExpired && <Notice kind="warn">Your session ended. Please log in again.</Notice>}
-            <PasswordStep onDone={(result) => setStep(result.next_step)} />
-          </>
-        )}
-        {step === "mfa_verify" && (
-          <VerifyStep onDone={() => void refresh()} onRestart={() => setStep("password")} />
-        )}
-        {step === "mfa_setup" && (
-          <SetupStep
-            onDone={(recovery) => {
-              setCodes(recovery);
-              setStep("recovery_codes");
-            }}
-            onRestart={() => setStep("password")}
-          />
-        )}
-        {step === "recovery_codes" && <RecoveryCodesStep codes={codes} onDone={() => void refresh()} />}
-      </div>
-      <p className="auth-footer muted">Read-only cloud security assessments. Authorized users only.</p>
-    </div>
+    <AuthShell>
+      {step === "password" && (
+        <>
+          {sessionExpired && <Notice kind="warn">Your session ended. Please log in again.</Notice>}
+          <PasswordStep onDone={(result) => setStep(result.next_step)} />
+        </>
+      )}
+      {step === "mfa_verify" && <VerifyStep onDone={() => void refresh()} onRestart={() => setStep("password")} />}
+      {step === "mfa_setup" && <MfaEnrollment onRestart={() => setStep("password")} />}
+    </AuthShell>
   );
+}
+
+/** First-time MFA set-up (after a first login, first-run setup or an invitation):
+ * authenticator QR code, then the recovery codes, then into the dashboard. */
+export function MfaEnrollment({ onRestart }: { onRestart?: () => void }) {
+  const { refresh } = useAuth();
+  const [codes, setCodes] = useState<string[] | null>(null);
+  if (codes) return <RecoveryCodesStep codes={codes} onDone={() => void refresh()} />;
+  return <SetupStep onDone={setCodes} onRestart={onRestart} />;
 }
 
 function PasswordStep({ onDone }: { onDone: (result: LoginResult) => void }) {
@@ -62,7 +53,10 @@ function PasswordStep({ onDone }: { onDone: (result: LoginResult) => void }) {
 
   return (
     <form onSubmit={submit} className="stack">
-      <h1>Log in</h1>
+      <div>
+        <h1>Welcome back</h1>
+        <p className="muted">Log in to continue to your assessments.</p>
+      </div>
       <ErrorBox message={error} />
       <Field label="E-mail">
         <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
@@ -128,7 +122,7 @@ function VerifyStep({ onDone, onRestart }: { onDone: () => void; onRestart: () =
   );
 }
 
-function SetupStep({ onDone, onRestart }: { onDone: (codes: string[]) => void; onRestart: () => void }) {
+function SetupStep({ onDone, onRestart }: { onDone: (codes: string[]) => void; onRestart?: () => void }) {
   const [setup, setSetup] = useState<MfaSetup>();
   const [qr, setQr] = useState<string>();
   const [code, setCode] = useState("");
@@ -184,9 +178,11 @@ function SetupStep({ onDone, onRestart }: { onDone: (codes: string[]) => void; o
           </button>
         </>
       )}
-      <button type="button" className="btn-link" onClick={onRestart}>
-        Start again
-      </button>
+      {onRestart && (
+        <button type="button" className="btn-link" onClick={onRestart}>
+          Start again
+        </button>
+      )}
     </form>
   );
 }
