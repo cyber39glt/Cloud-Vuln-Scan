@@ -72,7 +72,8 @@ def test_complete_login_resets_the_failure_count(http, db):
 def test_setup_refuses_without_a_configured_secret_key(db):
     from app.core.config import Settings
 
-    keyless = Settings(_env_file=None, session_cookie_secure=False)
+    # Explicit values: CI passes its .env to the test container as environment variables.
+    keyless = Settings(_env_file=None, session_cookie_secure=False, app_secret_key="")
     with pytest.raises(onboarding.OnboardingError, match="APP_SECRET_KEY"):
         onboarding.complete_setup(
             db, keyless, onboarding.setup_code(keyless), "a@b.test", "A", "a long passphrase!", None
@@ -201,6 +202,8 @@ def test_hsts_in_production(monkeypatch):
         app_env="production",
         postgres_password="a-real-database-password-1234",
         app_secret_key="x" * 48,
+        session_cookie_secure=True,  # explicit: CI's environment sets it to false
+        log_level="INFO",
     )
     monkeypatch.setattr(config, "get_settings", lambda: production)
     import app.main as main
