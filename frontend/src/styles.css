@@ -235,3 +235,14 @@ tr.inactive td { opacity: 0.6; }
   .finding-resource, .finding summary code { grid-column: 2; }
   .page-header { flex-direction: column; }
 }
+
+/* Review */
+.review-panel { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); }
+.review-panel .inline-form { margin-top: 0.25rem; }
+.review-panel .field input { min-width: 22rem; }
+.history { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.88rem; }
+.tag-review-confirmed { background: var(--ok-bg); color: var(--text); }
+.tag-review-false_positive { background: var(--surface-2); color: var(--muted); }
+.tag-review-accepted_risk { background: var(--warn-bg); color: var(--text); }
+.alert .btn-small { margin-left: 0.5rem; }
+.final-card { border-left: 4px solid var(--low); }

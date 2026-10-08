@@ -13,6 +13,7 @@ from app.api.schemas import (
     AssessmentCreate,
     AssessmentDetail,
     AssessmentOut,
+    FinalizationSummary,
     ScanJobOut,
     ScanRequest,
     ScanRunOut,
@@ -22,7 +23,7 @@ from app.core.config import get_settings
 from app.reporting.exports import to_csv
 from app.reporting.pdf import to_pdf
 from app.reporting.report import AssessmentReport, report_for_scan
-from app.storage import jobs
+from app.storage import jobs, reviews
 from app.storage import repository as repo
 from app.storage.models import Client
 
@@ -65,8 +66,18 @@ def get_assessment(
     assessment = repo.get_assessment(db, client.id, assessment_id)
     runs = repo.list_scan_runs(db, client.id, assessment.id)
     counts = repo.finding_counts(db, client.id, [r.id for r in runs])
+    final = reviews.current_finalization(db, client.id, assessment.id)
     return AssessmentDetail(
         **AssessmentOut.model_validate(assessment).model_dump(),
+        finalization=FinalizationSummary(
+            id=final.id,
+            scan_run_id=final.scan_run_id,
+            finalized_at=final.finalized_at,
+            finalized_by=final.finalized_by,
+            report_sha256=final.report_sha256,
+        )
+        if final
+        else None,
         scans=[
             ScanRunOut(
                 id=r.id,

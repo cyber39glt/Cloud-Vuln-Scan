@@ -141,9 +141,156 @@
       "title": "Evidence",
       "type": "object"
     },
-    "Finding": {
+    "FindingReviewInfo": {
       "additionalProperties": false,
-      "description": "A security weakness: a FAIL result enriched with the rule's explanation.",
+      "properties": {
+        "justification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Justification"
+        },
+        "original_severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "reviewed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed At"
+        },
+        "reviewed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed By"
+        },
+        "severity_overridden": {
+          "default": false,
+          "title": "Severity Overridden",
+          "type": "boolean"
+        },
+        "status": {
+          "default": "open",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "original_severity"
+      ],
+      "title": "FindingReviewInfo",
+      "type": "object"
+    },
+    "Framework": {
+      "enum": [
+        "cis_aws",
+        "cis_azure",
+        "nist_csf",
+        "soc2"
+      ],
+      "title": "Framework",
+      "type": "string"
+    },
+    "FrameworkRef": {
+      "additionalProperties": false,
+      "properties": {
+        "control_id": {
+          "title": "Control Id",
+          "type": "string"
+        },
+        "framework": {
+          "$ref": "#/$defs/Framework"
+        },
+        "framework_name": {
+          "title": "Framework Name",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "framework",
+        "framework_name",
+        "version",
+        "control_id",
+        "title",
+        "verified"
+      ],
+      "title": "FrameworkRef",
+      "type": "object"
+    },
+    "NotEvaluated": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Region"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "region",
+        "reason"
+      ],
+      "title": "NotEvaluated",
+      "type": "object"
+    },
+    "Provider": {
+      "enum": [
+        "aws",
+        "azure"
+      ],
+      "title": "Provider",
+      "type": "string"
+    },
+    "ReportFinding": {
+      "additionalProperties": false,
+      "description": "A finding as reported: `severity` is the EFFECTIVE severity (after any\noverride); the scanner's original severity is in `review.original_severity`.",
       "properties": {
         "account_id": {
           "title": "Account Id",
@@ -234,6 +381,9 @@
           ],
           "title": "Resource Type"
         },
+        "review": {
+          "$ref": "#/$defs/FindingReviewInfo"
+        },
         "risk": {
           "title": "Risk",
           "type": "string"
@@ -273,97 +423,11 @@
         "recommendation",
         "evidence",
         "framework_refs",
-        "detected_at"
+        "detected_at",
+        "review"
       ],
-      "title": "Finding",
+      "title": "ReportFinding",
       "type": "object"
-    },
-    "Framework": {
-      "enum": [
-        "cis_aws",
-        "cis_azure",
-        "nist_csf",
-        "soc2"
-      ],
-      "title": "Framework",
-      "type": "string"
-    },
-    "FrameworkRef": {
-      "additionalProperties": false,
-      "properties": {
-        "control_id": {
-          "title": "Control Id",
-          "type": "string"
-        },
-        "framework": {
-          "$ref": "#/$defs/Framework"
-        },
-        "framework_name": {
-          "title": "Framework Name",
-          "type": "string"
-        },
-        "title": {
-          "title": "Title",
-          "type": "string"
-        },
-        "verified": {
-          "title": "Verified",
-          "type": "boolean"
-        },
-        "version": {
-          "title": "Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "framework",
-        "framework_name",
-        "version",
-        "control_id",
-        "title",
-        "verified"
-      ],
-      "title": "FrameworkRef",
-      "type": "object"
-    },
-    "NotEvaluated": {
-      "additionalProperties": false,
-      "properties": {
-        "reason": {
-          "title": "Reason",
-          "type": "string"
-        },
-        "region": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Region"
-        },
-        "rule_id": {
-          "title": "Rule Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "rule_id",
-        "region",
-        "reason"
-      ],
-      "title": "NotEvaluated",
-      "type": "object"
-    },
-    "Provider": {
-      "enum": [
-        "aws",
-        "azure"
-      ],
-      "title": "Provider",
-      "type": "string"
     },
     "ReportSource": {
       "additionalProperties": false,
@@ -387,6 +451,40 @@
         },
         "consultancy": {
           "title": "Consultancy",
+          "type": "string"
+        },
+        "finalized_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalized At"
+        },
+        "finalized_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalized By"
+        },
+        "report_status": {
+          "default": "draft",
+          "enum": [
+            "draft",
+            "final"
+          ],
+          "title": "Report Status",
           "type": "string"
         },
         "scan_id": {
@@ -422,6 +520,14 @@
             "$ref": "#/$defs/Category"
           },
           "title": "By Category",
+          "type": "object"
+        },
+        "by_review_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "By Review Status",
           "type": "object"
         },
         "by_rule": {
@@ -515,6 +621,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "accepted_risks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReportFinding"
+      },
+      "title": "Accepted Risks",
+      "type": "array"
+    },
     "account_id": {
       "title": "Account Id",
       "type": "string"
@@ -530,9 +644,17 @@
       "title": "Engine Version",
       "type": "string"
     },
+    "false_positives": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReportFinding"
+      },
+      "title": "False Positives",
+      "type": "array"
+    },
     "findings": {
       "items": {
-        "$ref": "#/$defs/Finding"
+        "$ref": "#/$defs/ReportFinding"
       },
       "title": "Findings",
       "type": "array"
@@ -582,7 +704,7 @@
       "type": "string"
     },
     "schema_version": {
-      "default": "1.0",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
@@ -607,6 +729,6 @@
     "not_evaluated",
     "check_results"
   ],
-  "title": "Cloud Vuln Scan assessment report v1.0",
+  "title": "Cloud Vuln Scan assessment report v1.1",
   "type": "object"
 }

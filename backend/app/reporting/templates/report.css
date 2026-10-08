@@ -96,3 +96,4 @@ h3 { break-after: avoid; }
 pre { font-family: "DejaVu Sans Mono", monospace; font-size: 7pt; background: #f0f3f7; padding: 4pt 6pt;
   white-space: pre-wrap; word-break: break-all; margin: 2pt 0 4pt; border-radius: 2pt; }
 .refs { padding-left: 12pt; margin: 0; font-size: 8.5pt; }
+.adjusted { font-size: 7.5pt; color: #7a5300; background: #fff6df; padding: 1pt 3pt; margin-top: 2pt; }

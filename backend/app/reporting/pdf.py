@@ -22,8 +22,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from app.domain.enums import Severity
-from app.domain.findings import Finding
-from app.reporting.report import AssessmentReport
+from app.reporting.report import AssessmentReport, ReportFinding
 from app.rules.registry import ALL_RULES
 
 logger = logging.getLogger(__name__)
@@ -58,6 +57,10 @@ class Instance:
     region: str
     message: str
     resource_id: str | None
+    severity: Severity
+    review_status: str = "open"
+    # Set when a reviewer changed the severity: "High → Medium: <justification>".
+    adjustment: str | None = None
     evidence: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -85,8 +88,17 @@ def _evidence_text(observed: dict[str, Any]) -> str:
     return text
 
 
-def _groups(findings: tuple[Finding, ...]) -> list[FindingGroup]:
-    by_rule: OrderedDict[str, list[Finding]] = OrderedDict()
+def _adjustment(f: ReportFinding) -> str | None:
+    if not f.review.severity_overridden:
+        return None
+    change = f"{f.review.original_severity.value.capitalize()} → {f.severity.value.capitalize()}"
+    return f"Severity adjusted on review ({change}): {f.review.justification}"
+
+
+def _groups(findings: tuple[ReportFinding, ...]) -> list[FindingGroup]:
+    """One group per rule; a group's severity is the highest effective severity among
+    its resources (a reviewer may have adjusted individual resources)."""
+    by_rule: OrderedDict[str, list[ReportFinding]] = OrderedDict()
     for finding in sorted(findings, key=lambda f: (-f.severity.rank, f.rule_id)):
         by_rule.setdefault(finding.rule_id, []).append(finding)
 
@@ -101,6 +113,9 @@ def _groups(findings: tuple[Finding, ...]) -> list[FindingGroup]:
                     region=f.region or "—",
                     message=f.message,
                     resource_id=f.resource_id,
+                    severity=f.severity,
+                    review_status=f.review.status,
+                    adjustment=_adjustment(f),
                     evidence=[
                         {
                             "summary": e.summary,
@@ -181,6 +196,19 @@ def _checks_run(report: AssessmentReport) -> list[dict[str, Any]]:
     ]
 
 
+def _decision_row(f: ReportFinding) -> dict[str, str]:
+    return {
+        "title": f.title,
+        "rule_id": f.rule_id,
+        "severity": f.severity.value,
+        "resource": f.resource_name or "Account-wide",
+        "region": f.region or "—",
+        "justification": f.review.justification or "",
+        "reviewed_by": f.review.reviewed_by or "",
+        "reviewed_at": f.review.reviewed_at.strftime("%d %b %Y") if f.review.reviewed_at else "",
+    }
+
+
 def _overall_rating(counts: dict[Severity, int]) -> Severity | None:
     return next((s for s in SEVERITY_ORDER if counts.get(s, 0) > 0), None)
 
@@ -192,7 +220,7 @@ def _date(value: datetime) -> str:
 def build_context(report: AssessmentReport) -> dict[str, Any]:
     counts = {s: report.summary.by_severity.get(s, 0) for s in SEVERITY_ORDER}
     groups = _groups(report.findings)
-    finalized = report.source.assessment_status == "finalized"
+    final = report.source.report_status == "final"
     return {
         "r": report,
         "counts": counts,
@@ -204,7 +232,11 @@ def build_context(report: AssessmentReport) -> dict[str, Any]:
         "frameworks": _framework_appendix(groups),
         "checks": _checks_run(report),
         "not_evaluated": report.not_evaluated,
-        "draft": not finalized,
+        "draft": not final,
+        "finalized_on": _date(report.source.finalized_at) if report.source.finalized_at else None,
+        "accepted_risks": [_decision_row(f) for f in report.accepted_risks],
+        "false_positives": [_decision_row(f) for f in report.false_positives],
+        "review_counts": report.summary.by_review_status,
         "provider": "AWS" if report.provider.value == "aws" else "Microsoft Azure",
         "account_label": "account" if report.provider.value == "aws" else "subscription",
         "scan_date": _date(report.scan_completed_at),

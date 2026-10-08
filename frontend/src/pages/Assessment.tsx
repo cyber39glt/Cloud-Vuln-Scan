@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
+import { useAuth } from "../auth";
 import { ErrorBox, Field, Loading, Notice, PageHeader, Tag } from "../components/ui";
 import { formatDate, humanize, providerLabel } from "../format";
 import { useAction, useApi } from "../hooks";
-import type { AssessmentDetail, ScanJob, Stage } from "../types";
+import type { AssessmentDetail, Finalization, ScanJob, Stage } from "../types";
 
 const STAGES: Stage[] = ["connecting", "collecting", "evaluating", "saving"];
 const STAGE_LABEL: Record<Stage, string> = {
@@ -51,6 +52,17 @@ export function AssessmentPage() {
             <Link to={`/clients/${clientId}`}>← Client</Link> · <Tag>{humanize(a.status)}</Tag>
           </>
         }
+      />
+
+      <FinalizationCard
+        base={base}
+        detail={a}
+        clientId={clientId!}
+        scanRunning={Boolean(active)}
+        onChanged={() => {
+          void detail.reload();
+          void jobs.reload();
+        }}
       />
 
       <section className="card">
@@ -184,5 +196,94 @@ function StartScan({ base, disabled, onStarted }: { base: string; disabled: bool
       </button>
       <ErrorBox message={error} />
     </form>
+  );
+}
+
+function FinalizationCard({
+  base,
+  detail,
+  clientId,
+  scanRunning,
+  onChanged,
+}: {
+  base: string;
+  detail: AssessmentDetail;
+  clientId: string;
+  scanRunning: boolean;
+  onChanged: () => void;
+}) {
+  const { me } = useAuth();
+  const { busy, error, run } = useAction();
+  const [reason, setReason] = useState("");
+  const latest = detail.scans[0];
+  const final = detail.finalization;
+
+  async function finalize() {
+    if (!latest) return;
+    const confirmed = window.confirm(
+      "Finalize this assessment? The reviewed report of the latest scan is frozen and becomes the final " +
+        "version for the client. Reviews and new scans are locked until an administrator reopens it.",
+    );
+    if (!confirmed) return;
+    const done = await run(() => api.post<Finalization>(`${base}/finalize`, { scan_id: latest.id }));
+    if (done) onChanged();
+  }
+
+  async function reopen(event: FormEvent) {
+    event.preventDefault();
+    const done = await run(async () => {
+      await api.post(`${base}/reopen`, { reason });
+      return true;
+    });
+    if (done) {
+      setReason("");
+      onChanged();
+    }
+  }
+
+  if (final) {
+    return (
+      <section className="card final-card">
+        <h2>Finalized</h2>
+        <p>
+          Finalized {formatDate(final.finalized_at)} by {final.finalized_by}. Every output (dashboard, PDF, CSV, JSON) of
+          the <Link to={`/clients/${clientId}/scans/${final.scan_run_id}`}>final report</Link> comes from the frozen
+          snapshot.
+        </p>
+        <p className="muted">
+          Snapshot SHA-256: <code className="wrap">{final.report_sha256}</code>
+        </p>
+        {me?.role === "admin" ? (
+          <form className="inline-form" onSubmit={reopen}>
+            <Field label="Reopen for changes (administrators)" hint="The reason is recorded in the audit log.">
+              <input required minLength={10} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why does it need to change?" />
+            </Field>
+            <button className="btn" disabled={busy}>
+              Reopen assessment
+            </button>
+            <ErrorBox message={error} />
+          </form>
+        ) : (
+          <p className="muted">To change it, ask an administrator to reopen it.</p>
+        )}
+      </section>
+    );
+  }
+
+  if (!latest) return null;
+  return (
+    <section className="card">
+      <h2>Review and finalize</h2>
+      <p>
+        Review every finding of the latest scan in its{" "}
+        <Link to={`/clients/${clientId}/scans/${latest.id}`}>report</Link> (confirm, mark as false positive or accepted
+        risk, or adjust severity), then finalize to produce the final client report.
+      </p>
+      <button className="btn btn-primary" disabled={busy || scanRunning} onClick={() => void finalize()}>
+        Finalize assessment
+      </button>
+      {scanRunning && <span className="muted"> Wait for the running scan to finish.</span>}
+      <ErrorBox message={error} />
+    </section>
   );
 }

@@ -129,8 +129,18 @@ class ScanRunOut(BaseModel):
     findings: int
 
 
+class FinalizationSummary(BaseModel):
+    id: uuid.UUID
+    scan_run_id: uuid.UUID
+    finalized_at: datetime
+    finalized_by: str
+    report_sha256: str
+
+
 class AssessmentDetail(AssessmentOut):
     scans: list[ScanRunOut]
+    # Set while the assessment is finalized: the snapshot every output uses.
+    finalization: FinalizationSummary | None = None
 
 
 # ------------------------------------------------------------------ scan jobs

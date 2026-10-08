@@ -49,5 +49,10 @@ Only one scan per assessment can be queued or running at a time. Watch the worke
 - `POST` requests must be JSON (`Content-Type: application/json`; send `{}` when there
   is nothing to send). Anything else gets **415**. Requests from other websites
   (a foreign `Origin` header) get **403**.
+- Finding reviews: `PUT .../assessments/{id}/reviews/{finding_id}` with
+  `{"status": "accepted_risk", "justification": "..."}` (also `severity_override`).
+  Missing justification gets **422**; changes to a finalized assessment get **409**.
+  `POST .../finalize` (`{}` or `{"scan_id": ...}`) freezes the report; `POST .../reopen`
+  (`{"reason": "..."}`) is Admin-only.
 - Only `localhost` / `127.0.0.1` are accepted as host names (setting
   `API_ALLOWED_HOSTS`). Anything else gets **400**.

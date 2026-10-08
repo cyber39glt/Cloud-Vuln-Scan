@@ -28,5 +28,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted |
 | [0021](0021-dashboard.md) | Dashboard: same-origin React app with a strict Content-Security-Policy | Accepted |
 | [0022](0022-pdf-reports.md) | PDF reports: WeasyPrint with escaped templates and no resource fetching | Accepted |
+| [0023](0023-finding-review-and-finalization.md) | Finding review layer and assessment finalization | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

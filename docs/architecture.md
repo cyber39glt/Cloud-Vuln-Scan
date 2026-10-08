@@ -50,7 +50,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `api` | HTTP routes ([guide](api.md)) | Health **M0 ✓**; data API **M8 ✓**; login + roles **M9 ✓** |
 | `auth`, `audit` | Users, sessions, MFA, roles, client assignments, audit log ([guide](users.md)) | **M9 ✓** |
 | `providers/aws`, `providers/azure` | Authentication, connection validation, read-only guard, collectors. **The only code that calls cloud SDKs.** | AWS **M2–M3 ✓** ([guide](aws-connection.md)); Azure **M6–M7 ✓** ([guide](azure-connection.md)) |
-| `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓** (review layer: M12) |
+| `domain` | Normalized inventory (envelope + facets), check results, evidence, findings | **M1 ✓**; review layer **M12 ✓** |
 | `rules` | Rule definitions and engine. **Never calls cloud APIs.** See [rules.md](rules.md) | **M1 ✓**; 19 rules after **R1 ✓** ([list](rules.md#enabled-rules)) |
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `storage` | Database models, migrations, client-scoped repository ([data model](data-model.md)) | **M4 ✓** |
@@ -90,6 +90,15 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M12: finding review and finalization
+
+- Each finding can be confirmed, marked a false positive or an accepted risk, and given
+  a different severity; anything but "confirmed" needs a written justification. Every
+  change is kept as history and audit-logged; decisions carry over to rescans.
+- Finalizing an assessment freezes the reviewed report (JSON + SHA-256) and locks the
+  assessment; PDFs lose the DRAFT mark. Admins can reopen with a reason
+  ([ADR 0023](decisions/0023-finding-review-and-finalization.md)).
 
 ### M11: PDF reports
 
@@ -211,7 +220,7 @@ The same container image runs everywhere; only environment variables differ
 | **M9** | **Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log** ✓ ([ADR 0020](decisions/0020-authentication-implementation.md)) |
 | **M10** | **Dashboard** ✓ ([guide](dashboard.md), [ADR 0021](decisions/0021-dashboard.md)) |
 | **M11** | **PDF report** ✓ ([ADR 0022](decisions/0022-pdf-reports.md)) |
-| M12 | Finding review workflow and assessment finalization |
+| **M12** | **Finding review and finalization** ✓ ([ADR 0023](decisions/0023-finding-review-and-finalization.md)) |
 | M13 | Hardening: threat model, generated least-privilege policies, security review |
 | M14 | Hosting evaluation and deployment |
 | M15 | Documentation, license decision, public release |

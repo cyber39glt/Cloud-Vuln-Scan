@@ -1,7 +1,13 @@
 """The report dataset: everything an output needs, built once from a stored scan.
 
-    stored scan (hash-verified AssessmentResult) + client/assessment metadata
-        └─► AssessmentReport ─► JSON / CSV / (PDF, dashboard later)
+    stored scan (hash-verified AssessmentResult) + review decisions + metadata
+        └─► AssessmentReport ─► dashboard / PDF / JSON / CSV
+
+Reviews (ADR 0007, ADR 0023) never change the stored scan. They are applied here:
+findings get their effective severity and review details; false positives and
+accepted risks are moved to their own lists, so they never inflate the totals.
+A FINALIZED assessment's report is not rebuilt: it is read back from the frozen,
+hash-verified snapshot taken at finalization.
 
 The JSON export IS this model, serialized. Its structure is versioned
 (REPORT_SCHEMA_VERSION) and published as a JSON Schema for integrations.
@@ -9,7 +15,9 @@ The JSON export IS this model, serialized. Its structure is versioned
 
 import uuid
 from collections import Counter
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -17,11 +25,14 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import Category, CheckStatus, Provider, Severity
 from app.domain.findings import AssessmentResult, CheckResult, Finding
+from app.domain.reviews import Review
 from app.storage import repository as repo
+from app.storage import reviews
 from app.storage.models import Assessment, Client, ScanRun
 
 # Increase the minor version for additions, the major version for breaking changes.
-REPORT_SCHEMA_VERSION = "1.0"
+# 1.1: review details on findings, accepted_risks / false_positives lists, report status.
+REPORT_SCHEMA_VERSION = "1.1"
 
 STANDARD_NOTES = (
     "This is a technical security assessment of cloud configuration at a point in time. "
@@ -46,6 +57,26 @@ class ReportSource(_Frozen):
     assessment_status: str
     scan_id: uuid.UUID
     scan_sha256: str
+    # "final" only for the frozen snapshot of a finalized assessment; else "draft".
+    report_status: Literal["draft", "final"] = "draft"
+    finalized_at: datetime | None = None
+    finalized_by: str | None = None
+
+
+class FindingReviewInfo(_Frozen):
+    status: str = "open"
+    original_severity: Severity
+    severity_overridden: bool = False
+    justification: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
+
+
+class ReportFinding(Finding):
+    """A finding as reported: `severity` is the EFFECTIVE severity (after any
+    override); the scanner's original severity is in `review.original_severity`."""
+
+    review: FindingReviewInfo
 
 
 class RuleGroup(_Frozen):
@@ -58,12 +89,14 @@ class RuleGroup(_Frozen):
 
 
 class ReportSummary(_Frozen):
+    # Reported findings only (open and confirmed); see by_review_status for all.
     total_findings: int
     by_severity: dict[Severity, int]
     by_category: dict[Category, int]
     by_rule: tuple[RuleGroup, ...]
     checks_by_status: dict[CheckStatus, int]
     rules_run: int
+    by_review_status: dict[str, int] = {}
 
 
 class NotEvaluated(_Frozen):
@@ -83,26 +116,62 @@ class AssessmentReport(_Frozen):
     scan_started_at: datetime
     scan_completed_at: datetime
     summary: ReportSummary
-    findings: tuple[Finding, ...]
+    findings: tuple[ReportFinding, ...]
+    accepted_risks: tuple[ReportFinding, ...] = ()
+    false_positives: tuple[ReportFinding, ...] = ()
     not_evaluated: tuple[NotEvaluated, ...]
     check_results: tuple[CheckResult, ...]
     notes: tuple[str, ...] = STANDARD_NOTES
+
+
+def _apply_review(finding: Finding, review: Review | None) -> ReportFinding:
+    info = FindingReviewInfo(original_severity=finding.severity)
+    severity = finding.severity
+    if review is not None:
+        severity = review.severity_override or finding.severity
+        info = FindingReviewInfo(
+            status=review.status,
+            original_severity=finding.severity,
+            severity_overridden=review.severity_override is not None,
+            justification=review.justification,
+            reviewed_by=review.reviewed_by,
+            reviewed_at=review.reviewed_at,
+        )
+    return ReportFinding(**finding.model_dump(), review=info).model_copy(
+        update={"severity": severity}
+    )
+
+
+def _ordered(findings: list[ReportFinding]) -> tuple[ReportFinding, ...]:
+    return tuple(
+        sorted(findings, key=lambda f: (-f.severity.rank, f.rule_id, f.resource_name or ""))
+    )
 
 
 def build_report(
     result: AssessmentResult,
     source: ReportSource,
     generated_at: datetime | None = None,
+    *,
+    reviews: Mapping[str, Review] | None = None,
 ) -> AssessmentReport:
-    """Pure function: same inputs, same report. No database, no network."""
-    by_rule: dict[str, list[Finding]] = {}
-    for finding in result.findings:  # already sorted by severity, then rule
+    """Pure function: same inputs, same report. No database, no network.
+    `reviews` maps a finding's fingerprint (finding_id) to its review decision."""
+    reviews = reviews or {}
+    reviewed = [_apply_review(f, reviews.get(f.finding_id)) for f in result.findings]
+    reported = _ordered([f for f in reviewed if f.review.status in ("open", "confirmed")])
+    accepted = _ordered([f for f in reviewed if f.review.status == "accepted_risk"])
+    false_positives = _ordered([f for f in reviewed if f.review.status == "false_positive"])
+
+    by_rule: dict[str, list[ReportFinding]] = {}
+    for finding in reported:
         by_rule.setdefault(finding.rule_id, []).append(finding)
 
-    categories = Counter(f.category for f in result.findings)
+    categories = Counter(f.category for f in reported)
+    severities = Counter(f.severity for f in reported)
     summary = ReportSummary(
-        total_findings=len(result.findings),
-        by_severity=result.severity_counts(),
+        total_findings=len(reported),
+        by_severity={s: severities.get(s, 0) for s in Severity},
         by_category={c: categories.get(c, 0) for c in Category},
         by_rule=tuple(
             RuleGroup(
@@ -115,6 +184,7 @@ def build_report(
         ),
         checks_by_status=result.status_counts(),
         rules_run=len(result.rules_run),
+        by_review_status=dict(Counter(f.review.status for f in reviewed)),
     )
     return AssessmentReport(
         generated_at=generated_at or datetime.now(UTC),
@@ -126,7 +196,9 @@ def build_report(
         scan_started_at=result.started_at,
         scan_completed_at=result.completed_at,
         summary=summary,
-        findings=result.findings,
+        findings=reported,
+        accepted_risks=accepted,
+        false_positives=false_positives,
         not_evaluated=tuple(
             NotEvaluated(rule_id=r.rule_id, region=r.region, reason=r.message)
             for r in result.results
@@ -139,8 +211,12 @@ def build_report(
 def report_for_scan(
     session: Session, client_id: uuid.UUID, scan_id: uuid.UUID, consultancy: str
 ) -> AssessmentReport:
-    """Build the report for a stored scan. Client-scoped and hash-verified:
-    another client's scan is NotFound; a tampered scan raises IntegrityViolation."""
+    """The report for a stored scan. Client-scoped and hash-verified: another client's
+    scan is NotFound; a tampered scan or snapshot raises IntegrityViolation.
+
+    For the scan a finalized assessment was finalized on, the frozen snapshot is
+    returned (exactly what was delivered). Otherwise a DRAFT is built with the
+    current review decisions."""
     result = repo.load_scan_result(session, client_id, scan_id)
     scan, assessment, client = session.execute(
         select(ScanRun, Assessment, Client)
@@ -148,6 +224,13 @@ def report_for_scan(
         .join(Client, Client.id == ScanRun.client_id)
         .where(ScanRun.id == scan_id, ScanRun.client_id == client_id)
     ).one()
+
+    final = reviews.current_finalization(session, client_id, assessment.id)
+    if final is not None and final.scan_run_id == scan.id:
+        if repo.result_hash(final.report) != final.report_sha256:
+            raise repo.IntegrityViolation("finalized report does not match its recorded hash")
+        return AssessmentReport.model_validate(final.report)
+
     return build_report(
         result,
         ReportSource(
@@ -159,4 +242,5 @@ def report_for_scan(
             scan_id=scan.id,
             scan_sha256=scan.result_sha256,
         ),
+        reviews=reviews.load_reviews(session, client_id, assessment.id),
     )

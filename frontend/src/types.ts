@@ -73,6 +73,7 @@ export interface ScanRunSummary {
 
 export interface AssessmentDetail extends Assessment {
   scans: ScanRunSummary[];
+  finalization: Finalization | null;
 }
 
 export interface ScanJob {
@@ -127,6 +128,35 @@ export interface FrameworkRef {
   verified: boolean;
 }
 
+export type ReviewStatus = "open" | "confirmed" | "false_positive" | "accepted_risk";
+
+export interface FindingReviewInfo {
+  status: ReviewStatus;
+  original_severity: Severity;
+  severity_overridden: boolean;
+  justification: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+export interface ReviewEvent {
+  occurred_at: string;
+  actor: string;
+  status: ReviewStatus;
+  severity_override: Severity | null;
+  justification: string | null;
+  previous_status: ReviewStatus | null;
+  previous_severity_override: Severity | null;
+}
+
+export interface Finalization {
+  id: string;
+  scan_run_id: string;
+  finalized_at: string;
+  finalized_by: string;
+  report_sha256: string;
+}
+
 export interface Finding {
   finding_id: string;
   rule_id: string;
@@ -146,6 +176,7 @@ export interface Finding {
   evidence: Evidence[];
   framework_refs: FrameworkRef[];
   detected_at: string;
+  review: FindingReviewInfo;
 }
 
 export interface Report {
@@ -159,6 +190,9 @@ export interface Report {
     assessment_status: string;
     scan_id: string;
     scan_sha256: string;
+    report_status: "draft" | "final";
+    finalized_at: string | null;
+    finalized_by: string | null;
   };
   provider: Provider;
   account_id: string;
@@ -171,8 +205,11 @@ export interface Report {
     by_category: Record<string, number>;
     checks_by_status: Record<string, number>;
     rules_run: number;
+    by_review_status: Partial<Record<ReviewStatus, number>>;
   };
   findings: Finding[];
+  accepted_risks: Finding[];
+  false_positives: Finding[];
   not_evaluated: { rule_id: string; region: string | null; reason: string }[];
   notes: string[];
 }

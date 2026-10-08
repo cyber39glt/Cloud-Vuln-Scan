@@ -6,12 +6,14 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M11, PDF reports).**
+> **Status: early development (milestone M12, finding review).**
 > Consultants log in to a web dashboard (password + authenticator app), register client
 > AWS accounts and Azure subscriptions, run read-only scans with live progress (19
 > rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
-> downloadable as a client-ready PDF report, CSV or JSON. Admins manage users, client
-> assignments and the audit log. The finding review workflow is not built yet.
+> downloadable as a client-ready PDF report, CSV or JSON. Consultants review each finding
+> (confirm, false positive, accepted risk, severity change with justification) and
+> finalize the assessment, which freezes the reviewed report. Admins manage users,
+> client assignments and the audit log.
 > See [the roadmap](docs/architecture.md#roadmap).
 
 > **Security boundary.** This is a defensive assessment tool. It never modifies,
