@@ -178,6 +178,9 @@ class ScanRun(Base):
     # canonical JSON form. Reading it back re-checks the hash (tamper evidence).
     result: Mapped[dict[str, Any]] = mapped_column(JsonType)
     result_sha256: Mapped[str] = mapped_column(String(64))
+    # Keyed signature over (id, client, hash): tamper evidence that does not rely on
+    # the database alone (ADR 0026).
+    result_mac: Mapped[str] = mapped_column(String(64))
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -187,6 +190,7 @@ class ScanRun(Base):
         ),
         UniqueConstraint("id", "client_id"),
         CheckConstraint("length(result_sha256) = 64", name="scan_result_hash_length"),
+        CheckConstraint("length(result_mac) = 64", name="scan_result_mac_length"),
     )
 
 
@@ -485,6 +489,7 @@ class AssessmentFinalization(Base):
     finalized_by: Mapped[str] = mapped_column(String(254))
     report: Mapped[dict[str, Any]] = mapped_column(JsonType)
     report_sha256: Mapped[str] = mapped_column(String(64))
+    report_mac: Mapped[str] = mapped_column(String(64))
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -499,6 +504,7 @@ class AssessmentFinalization(Base):
         ),
         Index("ix_assessment_finalizations_assessment", "assessment_id", "finalized_at"),
         CheckConstraint("length(report_sha256) = 64", name="final_report_hash_length"),
+        CheckConstraint("length(report_mac) = 64", name="final_report_mac_length"),
     )
 
 

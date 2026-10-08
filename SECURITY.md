@@ -82,9 +82,11 @@ Details: [ADR 0009](docs/decisions/0009-authentication-and-authorization.md),
 
 ## Planned controls (later milestones)
 
-With hosting (M14): shared rate limiting and trusted-proxy client addresses, a
-non-owner database role and keyed (HMAC) result hashes, container runtime hardening.
-Later: SSO through an external identity provider. The full list of open risks is in
+Production deployment ([docs/deployment.md](docs/deployment.md),
+[ADR 0026](docs/decisions/0026-production-deployment.md)): HTTPS via Caddy, internal
+networks, a restricted database login, keyed integrity signatures, hardened
+containers, backups. Still open: keyless platform cloud sign-in (depends on the
+hosting choice), SSO through an external identity provider. The full list of open risks is in
 [docs/threat-model.md](docs/threat-model.md#residual-risks-accepted-or-deferred). Cloud access uses temporary credentials only (AWS `AssumeRole` with
 ExternalId, Azure multi-tenant app with no stored client secrets), see
 [ADR 0005](docs/decisions/0005-cloud-access-model.md).

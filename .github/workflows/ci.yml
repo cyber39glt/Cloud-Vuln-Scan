@@ -85,6 +85,17 @@ jobs:
       - name: Production image contains the built dashboard
         run: docker run --rm --entrypoint test cloud-vuln-scan-api:ci -f /app/web/index.html
 
+  production-stack:
+    name: Production stack (HTTPS, isolation, database login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Start deploy/compose.prod.yml with DOMAIN=localhost and check it
+        run: bash scripts/prod-smoke.sh
+
   dashboard:
     name: Dashboard (type-check, tests, build)
     runs-on: ubuntu-latest

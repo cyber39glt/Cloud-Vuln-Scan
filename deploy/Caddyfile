@@ -1,0 +1,22 @@
+# CloudSecura reverse proxy (docs/deployment.md).
+# Caddy obtains and renews the HTTPS certificate for {$DOMAIN} automatically and
+# redirects plain HTTP to HTTPS. For a local test, DOMAIN=localhost uses Caddy's own
+# local certificate authority instead.
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+	# Requests larger than this are refused (the API accepts small JSON bodies only).
+	request_body {
+		max_size 1MB
+	}
+	header -Server
+	reverse_proxy api:8000
+	log {
+		output stdout
+		format json
+	}
+}

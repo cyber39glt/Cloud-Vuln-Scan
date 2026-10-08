@@ -26,7 +26,8 @@ def run_migrations_online() -> None:
             context.run_migrations()
         return
 
-    engine = create_engine(get_settings().database_url)
+    # Migrations run as the table owner (the application login cannot change tables).
+    engine = create_engine(get_settings().owner_database_url)
     with engine.connect() as conn:
         context.configure(connection=conn, target_metadata=target_metadata)
         with context.begin_transaction():

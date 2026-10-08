@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 
 import pytest
 from sqlalchemy import delete, select, text
@@ -203,6 +204,7 @@ def test_hsts_in_production(monkeypatch):
         postgres_password="a-real-database-password-1234",
         app_secret_key="x" * 48,
         session_cookie_secure=True,  # explicit: CI's environment sets it to false
+        postgres_owner_user="cloudsecura_owner",
         log_level="INFO",
     )
     monkeypatch.setattr(config, "get_settings", lambda: production)
@@ -219,3 +221,44 @@ def test_unassigning_an_unknown_client_is_not_found(api, db):
     user, _ = make_user(db, "con@subtletech.test", Role.CONSULTANT)
     response = api.delete(f"/api/v1/admin/users/{user.id}/clients/{uuid.uuid4()}")
     assert response.status_code == 404
+
+
+# ------------------------------------------------------------------ keyed integrity (ADR 0026)
+
+
+def test_recomputed_hash_without_the_key_is_detected(db, scanned):
+    """Someone who can write to the database changes a stored scan and recomputes
+    its SHA-256 (no secret needed for that): the keyed signature no longer matches."""
+    client, _, scan, _ = scanned
+    forged = dict(scan.result, account_id="999999999999")
+    db.execute(text("ALTER TABLE scan_runs DISABLE TRIGGER scan_runs_immutable"))
+    db.execute(
+        text("UPDATE scan_runs SET result = CAST(:r AS jsonb), result_sha256 = :h WHERE id = :i"),
+        {"r": json.dumps(forged), "h": repo.result_hash(forged), "i": scan.id},
+    )
+    db.execute(text("ALTER TABLE scan_runs ENABLE TRIGGER scan_runs_immutable"))
+    db.expire_all()
+    with pytest.raises(repo.IntegrityViolation):
+        repo.load_scan_result(db, client.id, scan.id)
+
+
+def test_signature_binds_the_record_to_its_row_and_client(db, scanned):
+    client, assessment, scan, result = scanned
+    other = repo.save_scan_result(db, client.id, assessment.id, result)
+    assert other.result_mac != scan.result_mac  # same content, different record
+    assert repo.verify_mac(scan.result_mac, "scan_run", scan.id, client.id, scan.result_sha256)
+    assert not repo.verify_mac(scan.result_mac, "scan_run", other.id, client.id, scan.result_sha256)
+    assert not repo.verify_mac(
+        scan.result_mac, "scan_run", scan.id, assessment.id, scan.result_sha256
+    )
+
+
+def test_the_signature_key_comes_from_app_secret_key(monkeypatch):
+    from app.core import config
+
+    first = config.Settings(_env_file=None, app_secret_key="a" * 48)
+    second = config.Settings(_env_file=None, app_secret_key="b" * 48)
+    monkeypatch.setattr(repo, "get_settings", lambda: first)
+    mac_a = repo.integrity_mac("scan_run", "x")
+    monkeypatch.setattr(repo, "get_settings", lambda: second)
+    assert repo.integrity_mac("scan_run", "x") != mac_a

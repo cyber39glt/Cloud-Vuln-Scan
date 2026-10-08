@@ -63,7 +63,7 @@ component, data flow or trust boundary changes.
 | S2 | Session hijacking | Random 256-bit token, stored hashed; `HttpOnly`, `Secure`, `SameSite=Strict`, `__Host-` cookie; idle and absolute expiry; rotation at login | `auth/sessions.py` |
 | S3 | Someone claims a fresh installation | Setup page needs a code from the server, derived from `APP_SECRET_KEY` (refused without one); closed once any user exists | `auth/onboarding.py`, ADR 0024 |
 | S4 | Forwarded or leftover invitation link | Single use, expiry, revocable, hash stored, token never in a URL the server sees; revoked when its creator loses admin rights | ADR 0024, 0025 |
-| T1 | Tampering with stored scans or delivered reports | SHA-256 checked on every read; database triggers refuse UPDATE; a finalized assessment without its snapshot is an integrity error | `storage/repository.py`, `reporting/report.py` |
+| T1 | Tampering with stored scans or delivered reports | SHA-256 and a keyed HMAC checked on every read; database triggers refuse UPDATE; in production the application login cannot change or delete history or disable triggers; a finalized assessment without its snapshot is an integrity error | `storage/repository.py`, `storage/dbroles.py`, ADR 0026 |
 | T2 | Concurrent requests bypassing "finalized" checks | Finalize, reopen, review and scan start/save lock the assessment row (`SELECT … FOR UPDATE`) | ADR 0025 |
 | T3 | CSV formula injection from client text | Formula-start cells prefixed with `'`; every field quoted (also safe in `;`-separator locales) | `reporting/exports.py` |
 | T4 | Malicious HTML/CSS in PDF | Auto-escaping templates; the renderer may fetch nothing | ADR 0022 |
@@ -84,13 +84,15 @@ These are known and not yet fixed. Each has an owner milestone.
 
 | Risk | Why it remains | Plan |
 |---|---|---|
-| The app's database role owns the tables (in Docker it is the superuser), so someone with database write access could disable triggers and recompute the unkeyed SHA-256 hashes | Needs a separate, non-owner application role and a keyed hash (HMAC) with the key outside the database | M14 (deployment) |
-| Rate limits are per process and use the direct peer address; behind a proxy all users share one bucket | Depends on the hosting choice | M14 |
+| ~~App connects as the table owner; unkeyed hashes~~ | **Fixed in M14**: restricted application login in production; HMAC signatures ([ADR 0026](decisions/0026-production-deployment.md)) | Done |
+| ~~Rate limit sees the proxy's address~~ | **Fixed in M14**: forwarded address trusted from Caddy only. Limits remain per process (one API process by design) | Done |
+| In development, one database login does everything | Simplicity on developer machines; production refuses it | Accepted |
+| The platform's cloud sign-in uses stored keys unless the host provides an identity | Keyless options depend on the hosting choice ([hosting.md](hosting.md)) | After the host is chosen |
 | No overall time limit per scan; one very large or slow environment can occupy the worker for long | Per-request timeouts and retries are bounded; a hard deadline needs running scans in a separate process | Later |
 | AWS S3 region redirects without a region header make botocore call `HeadBucket`, which the guard blocks: that scan fails (safely) | `HeadBucket` needs `s3:ListBucket`, which also lists object names; not granted on purpose | Accepted (rare) |
 | With a region restriction, S3 buckets and Azure resources outside the regions are still read, then discarded | The APIs list account-wide | Accepted (configuration only) |
 | Lists and exports are not paginated or rate-limited for logged-in users | Authenticated users only; impact is load, not data exposure | Later |
 | CI actions and base images are pinned by tag, not by immutable digest | Low risk with a read-only CI token | M15 (before public release) |
-| Container runtime hardening (read-only file system, dropped capabilities) | No production deployment yet | M14 |
+| ~~Container runtime hardening~~ | **Fixed in M14**: read-only file systems, no capabilities, no privilege escalation, network isolation | Done |
 | An admin can reset another admin's password and MFA | By design (equal admins); every reset is audited | Accepted |
 | Real AWS/Azure behaviour of the least-privilege permissions is tested against simulated APIs only | No live account in development | First sandbox test (docs/aws-connection.md, docs/azure-connection.md) |
