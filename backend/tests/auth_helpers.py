@@ -14,7 +14,11 @@ _PASSWORD_HASH = passwords.hash_password(PASSWORD)  # hashed once: Argon2id is s
 
 def plain_http_settings() -> Settings:
     # Plain-HTTP test client: the Secure cookie flag would stop it sending the cookie.
-    return Settings(_env_file=None, session_cookie_secure=False)
+    return Settings(
+        _env_file=None,
+        session_cookie_secure=False,
+        app_secret_key="test-only-secret-key-0123456789-abcdefghijklmnop",  # gitleaks:allow
+    )
 
 
 def make_user(

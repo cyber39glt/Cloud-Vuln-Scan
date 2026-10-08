@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app import policies
 from app.api.deps import AdminUser, ClientScope, CurrentUser, DbSession, client_ip
 from app.api.schemas import (
     AwsConnectionCreate,
@@ -67,18 +68,20 @@ def onboarding(connection_id: uuid.UUID, client: ClientScope, db: DbSession) -> 
             role_name=settings.aws_assessment_role_name,
             external_id=connection.external_id,
             template="infra/aws/client-onboarding-role.yaml",
+            permissions=policies.aws_actions(),
             guide="docs/aws-connection.md",
         )
     app_id = settings.azure_client_id or None
-    scope = f"/subscriptions/{connection.account_id}"
     return Onboarding(
         provider=Provider.AZURE,
         admin_consent_url=admin_consent_url(connection.tenant_id or "", app_id) if app_id else None,
-        role_commands=[
-            f"az role assignment create --assignee {app_id or '<platform app ID>'} "
-            f'--role "{role}" --scope {scope}'
-            for role in ("Reader", "Security Reader")
-        ],
+        role_definition=policies.azure_role(settings.consultancy_name, connection.account_id),
+        role_commands=policies.azure_role_commands(
+            settings.consultancy_name, connection.account_id, app_id or "<platform app ID>"
+        ),
+        fallback_role_commands=policies.azure_builtin_role_commands(
+            connection.account_id, app_id or "<platform app ID>"
+        ),
         guide="docs/azure-connection.md",
     )
 

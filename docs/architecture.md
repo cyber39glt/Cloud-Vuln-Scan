@@ -91,6 +91,15 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### M13: hardening
+
+- Clients grant only the read permissions the checks use, generated from the code
+  (AWS template default; Azure custom role); the broader built-in roles remain an option.
+- Code-level security review; every fix has a regression test. Threat model with the
+  remaining risks and their milestones ([threat-model.md](threat-model.md),
+  [ADR 0025](decisions/0025-least-privilege-and-security-review.md)).
+- CI audits dependencies for known vulnerabilities.
+
 ### Dashboard redesign and onboarding
 
 - Public showcase page for visitors (features and checks, no client data), new sidebar
@@ -229,6 +238,6 @@ The same container image runs everywhere; only environment variables differ
 | **M10** | **Dashboard** ✓ ([guide](dashboard.md), [ADR 0021](decisions/0021-dashboard.md)) |
 | **M11** | **PDF report** ✓ ([ADR 0022](decisions/0022-pdf-reports.md)) |
 | **M12** | **Finding review and finalization** ✓ ([ADR 0023](decisions/0023-finding-review-and-finalization.md)) |
-| M13 | Hardening: threat model, generated least-privilege policies, security review |
+| **M13** | **Hardening: threat model, generated least-privilege policies, security review** ✓ ([threat model](threat-model.md), [ADR 0025](decisions/0025-least-privilege-and-security-review.md)) |
 | M14 | Hosting evaluation and deployment |
 | M15 | Documentation, license decision, public release |

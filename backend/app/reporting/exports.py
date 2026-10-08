@@ -102,7 +102,9 @@ def to_csv(report: AssessmentReport) -> bytes:
     risks, then false positives; the review_status column tells them apart. UTF-8
     with a byte-order mark, which Excel on Windows needs for non-English characters."""
     buffer = io.StringIO()
-    writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    # Every field quoted: Excel in locales whose list separator is ";" splits
+    # unquoted fields on ";", which would turn "name;=formula" into a formula cell.
+    writer = csv.writer(buffer, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
     writer.writerow(CSV_COLUMNS)
     for findings in (report.findings, report.accepted_risks, report.false_positives):
         writer.writerows(_row(finding, report) for finding in findings)

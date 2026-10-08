@@ -7,7 +7,7 @@ Flow (Microsoft Entra ID = Azure's identity service):
   Entra ID issues a short-lived token (about 1 hour) only if the client's admin has
       consented to the app in their tenant
   platform --GET requests with the token--> Azure Resource Manager
-      Azure allows only what the client's role assignments permit (Reader + Security Reader)
+      Azure allows only what the client's role assignment permits (the custom read-only role)
 
 The token is held in memory by azure-identity and never written to disk, logs or
 the database. The platform stores only the tenant and subscription IDs.

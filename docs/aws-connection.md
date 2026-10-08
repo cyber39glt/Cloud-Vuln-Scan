@@ -14,7 +14,7 @@ Platform identity (SubtleTech)                 Client AWS account
         │ 1. sts:AssumeRole(role ARN, ExternalId) ───► │ Role "SubtleTechSecurityAssessment"
         │                                              │  • trusts ONLY the platform identity
         │ 2. temporary keys (≤ 1 hour) ◄────────────── │  • requires the ExternalId
-        │                                              │  • SecurityAudit + ViewOnlyAccess
+        │                                              │  • only the reads the checks use
         │ 3. Describe/List/Get calls only ───────────► │  • explicit Deny on data and secrets
 ```
 
@@ -27,8 +27,11 @@ Platform identity (SubtleTech)                 Client AWS account
 
 ### The two read-only layers
 
-1. **In the client account** (`infra/aws/client-onboarding-role.yaml`): read-only
-   AWS-managed policies plus an explicit **Deny** on reading data and secrets (S3 object
+1. **In the client account** (`infra/aws/client-onboarding-role.yaml`): by default
+   (`PermissionSet: LeastPrivilege`) the role may call **only the 16 read operations the
+   checks use**, listed below; nothing else is granted. Optionally
+   (`PermissionSet: AwsManagedReadOnly`) it gets the broader AWS-managed `SecurityAudit`
+   and `ViewOnlyAccess` policies instead. Either way an explicit **Deny** blocks reading data and secrets (S3 object
    contents, Secrets Manager values, SSM parameters, KMS decrypt, database items, log
    contents, EC2 Windows passwords and console output, etc.). A Deny overrides any Allow,
    even if more permissions are attached to the role later.
@@ -39,6 +42,30 @@ Platform identity (SubtleTech)                 Client AWS account
    - The platform's own identity may only call `sts:GetCallerIdentity` and `sts:AssumeRole`.
    - Inside client accounts only `Describe*`/`List*`/`Get*` operations can be allowed;
      this is enforced in code and by tests.
+
+### The exact permissions (least-privilege default)
+
+Generated from the code ([ADR 0025](decisions/0025-least-privilege-and-security-review.md)):
+the same list the platform's guard allows, so they cannot drift apart. Also available as
+a plain IAM policy: `infra/aws/least-privilege-policy.json`.
+
+```
+cloudtrail:DescribeTrails        iam:GetAccountSummary           s3:GetBucketAcl
+cloudtrail:GetTrailStatus        iam:GetCredentialReport         s3:GetBucketLocation
+ec2:DescribeRegions              iam:ListEntitiesForPolicy       s3:GetBucketPolicyStatus
+ec2:DescribeSecurityGroups       rds:DescribeDBInstances         s3:GetBucketPublicAccessBlock
+iam:GenerateCredentialReport     s3:GetAccountPublicAccessBlock  s3:ListAllMyBuckets
+iam:GetAccountPasswordPolicy
+```
+
+`iam:GenerateCredentialReport` is the one non-Get/List/Describe name: it asks IAM to
+build the account's credential report, which `iam:GetCredentialReport` then reads; it
+changes no configuration ([ADR 0018](decisions/0018-rule-expansion-r1.md)).
+
+**When checks are added**, run `.\scripts\dev.ps1 policies` to regenerate the list
+(a test fails until you do). Clients then update their stack with the new template;
+until they do, the new checks report "not evaluated" (access denied) rather than
+silently passing.
 
 ### What the client sees
 
@@ -59,7 +86,7 @@ are never written to disk, logs or the database.
    **With new resources** → **Upload a template file** → selects
    `client-onboarding-role.yaml`.
 3. Stack name: `SubtleTech-security-assessment`. Parameters: paste the ARN and ExternalId;
-   keep the default role name.
+   keep the default role name and `PermissionSet: LeastPrivilege`.
 4. Tick "I acknowledge that AWS CloudFormation might create IAM resources" → **Submit**.
 5. When the stack shows `CREATE_COMPLETE`, the client sends their **account ID**.
 6. To revoke access at any time: delete the stack.

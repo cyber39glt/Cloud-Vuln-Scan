@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import redact_text
 from app.domain.enums import ScanStage
+from app.storage import repository as repo
 from app.storage.models import (
     ACTIVE_JOB_STATUSES,
-    Assessment,
     AssessmentStatus,
     JobStatus,
     ScanJob,
@@ -51,11 +51,7 @@ def enqueue_scan(
     assessment_id: uuid.UUID,
     regions: list[str] | None = None,
 ) -> ScanJob:
-    assessment = session.scalar(
-        select(Assessment).where(Assessment.id == assessment_id, Assessment.client_id == client_id)
-    )
-    if assessment is None:
-        raise NotFoundError("assessment not found")
+    assessment = repo.get_assessment(session, client_id, assessment_id, for_update=True)
     if assessment.status == AssessmentStatus.FINALIZED:
         raise ScanNotAllowed("this assessment is finalized; start a new assessment to rescan")
 

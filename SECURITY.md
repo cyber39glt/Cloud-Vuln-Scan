@@ -15,10 +15,13 @@ It **never**:
 Read-only behaviour is enforced in two independent layers (see
 [ADR 0002](docs/decisions/0002-read-only-security-boundary.md)):
 
-1. **Client-side permissions:** clients grant only read-only roles.
+1. **Client-side permissions:** clients grant only the read permissions the checks use
+   (generated from the code; broader built-in read-only roles are an option), see
+   [ADR 0025](docs/decisions/0025-least-privilege-and-security-review.md).
 2. **Application-side guard:** the platform allows only an explicit list of read
    operations and blocks every other cloud API call before it is sent, even if the
-   granted credentials would allow more. Implemented for AWS in
+   granted credentials would allow more (for Azure, checked both first and last in the
+   request pipeline, so requests the SDK creates on its own are checked too). Implemented for AWS in
    `backend/app/providers/aws/guard.py` (see [docs/aws-connection.md](docs/aws-connection.md))
    and for Azure in `backend/app/providers/azure/guard.py` (see
    [docs/azure-connection.md](docs/azure-connection.md)).
@@ -45,10 +48,11 @@ The project is pre-release. Only the latest commit on the default branch is supp
 |---|---|
 | No secrets in git | `.env` is git-ignored; `.env.example` holds placeholders only; Gitleaks scans the full history in CI and via `dev.ps1 secrets` |
 | Secrets never logged | Structured JSON logging with automatic redaction of credential-like values; `SecretStr` for passwords; config errors never echo values |
-| Safe production config | The app refuses to start in production with placeholder or short passwords, or DEBUG logging |
+| Safe production config | The production image runs in production mode unless overridden; the app then refuses placeholder or short secrets, insecure cookies and DEBUG logging |
 | Minimal exposure | Database not published outside Docker; API bound to `127.0.0.1` in development; API docs disabled in production; no `Server` header |
 | Least privilege | Containers run as a non-root user; CI token is read-only |
-| Supply chain | Exact dependency versions and hashes pinned in `uv.lock`; installs fail if the lockfile is out of date |
+| Supply chain | Exact dependency versions and hashes pinned in `uv.lock` and `package-lock.json`; CI audits both for known vulnerabilities; the CI token is not persisted |
+| Threat model | [docs/threat-model.md](docs/threat-model.md): assets, boundaries, mitigations and the open risks with their milestone |
 | Health endpoints | Unauthenticated, so they return fixed statuses only, never error details or versions |
 
 ## If a secret is committed
@@ -64,11 +68,12 @@ remove it from history. Deleting the file is not enough; it remains in git histo
 | Passwords | Argon2id; 12+ characters; temporary passwords must be changed at first use |
 | MFA | Authenticator app (TOTP) mandatory for every user, no SMS; secrets encrypted at rest; codes single-use; hashed one-time recovery codes |
 | Sessions | Server-side; random token in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie, stored hashed; 30-minute idle / 12-hour absolute limit; ended on logout, password or MFA change, deactivation |
-| Brute force | Account lockout after 5 failures; per-IP login rate limit; identical responses for unknown and wrong accounts |
+| Brute force | Account lockout after 5 failures (wrong passwords and wrong authenticator codes together, since the last complete login); per-IP rate limit; identical responses for unknown and wrong accounts |
 | CSRF / browser attacks | `SameSite=Strict`, JSON-only POSTs, foreign-Origin refusal, host allowlist |
 | Authorization | Admin / Consultant roles; Consultants see only assigned clients (others are "not found"); enforced by one shared dependency on every endpoint, with a test covering every route |
 | Dashboard | Same origin as the API (no CORS); session only in an `HttpOnly` cookie; strict Content-Security-Policy (no inline or third-party code); only build files served ([ADR 0021](docs/decisions/0021-dashboard.md)) |
-| Reports | CSV cells neutralized against formula injection; PDF templates auto-escape client text and the PDF renderer may not fetch any URL or file ([ADR 0022](docs/decisions/0022-pdf-reports.md)) |
+| Browser headers | Strict CSP, no framing, no sniffing, no referrer, Permissions-Policy, Cross-Origin-Opener-Policy; HSTS in production |
+| Reports | CSV cells neutralized against formula injection and every field quoted; PDF templates auto-escape client text and the PDF renderer may not fetch any URL or file ([ADR 0022](docs/decisions/0022-pdf-reports.md)) |
 | Audit | Append-only log (database refuses changes) of authentication, account changes, data access, scans and exports; never contains secrets |
 
 Details: [ADR 0009](docs/decisions/0009-authentication-and-authorization.md),
@@ -77,8 +82,9 @@ Details: [ADR 0009](docs/decisions/0009-authentication-and-authorization.md),
 
 ## Planned controls (later milestones)
 
-Shared (multi-instance) rate limiting and trusted-proxy client addresses with hosting
-(M14); SSO through an external identity provider; a formal threat model and security
-review (M13). Cloud access uses temporary credentials only (AWS `AssumeRole` with
+With hosting (M14): shared rate limiting and trusted-proxy client addresses, a
+non-owner database role and keyed (HMAC) result hashes, container runtime hardening.
+Later: SSO through an external identity provider. The full list of open risks is in
+[docs/threat-model.md](docs/threat-model.md#residual-risks-accepted-or-deferred). Cloud access uses temporary credentials only (AWS `AssumeRole` with
 ExternalId, Azure multi-tenant app with no stored client secrets), see
 [ADR 0005](docs/decisions/0005-cloud-access-model.md).

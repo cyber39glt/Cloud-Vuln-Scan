@@ -344,8 +344,12 @@ def test_cli_azure_connect_prints_onboarding_steps(cli_db, capsys, monkeypatch):
     out = capsys.readouterr().out
 
     assert f"login.microsoftonline.com/{AZ_TENANT}/adminconsent?client_id=3333" in out
-    assert f'--role "Reader" --scope /subscriptions/{AZ_SUB}' in out
-    assert '--role "Security Reader"' in out
+    assert "az role definition create --role-definition" in out
+    assert (
+        f"--role 'SubtleTech Security Assessment (read-only)' --scope /subscriptions/{AZ_SUB}"
+        in out
+    )
+    assert '--role "Reader"' in out and '--role "Security Reader"' in out  # fallback
 
     # validate --client finds the stored tenant; without a platform identity it stops there.
     monkeypatch.setattr(cli, "get_settings", lambda: Settings(_env_file=None))

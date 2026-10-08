@@ -181,10 +181,23 @@ def get_connection_by_id(
 # ------------------------------------------------------------------ assessments + scans
 
 
-def get_assessment(session: Session, client_id: uuid.UUID, assessment_id: uuid.UUID) -> Assessment:
-    assessment = session.scalar(
-        select(Assessment).where(Assessment.id == assessment_id, Assessment.client_id == client_id)
+class AssessmentLocked(RuntimeError):
+    """The assessment is finalized: its results can no longer change."""
+
+
+def get_assessment(
+    session: Session, client_id: uuid.UUID, assessment_id: uuid.UUID, *, for_update: bool = False
+) -> Assessment:
+    """`for_update=True` locks the row until the transaction ends (SELECT ... FOR
+    UPDATE). Every action that checks or changes whether an assessment is finalized
+    (finalize, reopen, review, start or save a scan) takes this lock, so they happen
+    one after the other and a check cannot be overtaken by a concurrent change."""
+    query = select(Assessment).where(
+        Assessment.id == assessment_id, Assessment.client_id == client_id
     )
+    if for_update:
+        query = query.with_for_update()
+    assessment = session.scalar(query)
     if assessment is None:
         raise NotFoundError("assessment not found")
     return assessment
@@ -255,12 +268,13 @@ def finding_counts(
 def save_scan_result(
     session: Session, client_id: uuid.UUID, assessment_id: uuid.UUID, result: AssessmentResult
 ) -> ScanRun:
-    """Store a completed scan: the frozen dataset + hash, and one row per finding."""
-    assessment = session.scalar(
-        select(Assessment).where(Assessment.id == assessment_id, Assessment.client_id == client_id)
-    )
-    if assessment is None:
-        raise NotFoundError("assessment not found")
+    """Store a completed scan: the frozen dataset + hash, and one row per finding.
+    Refused if the assessment was finalized meanwhile (e.g. while the scan ran)."""
+    assessment = get_assessment(session, client_id, assessment_id, for_update=True)
+    if assessment.status == AssessmentStatus.FINALIZED:
+        raise AssessmentLocked(
+            "The assessment was finalized while the scan was running; the result was not saved."
+        )
 
     result_json = result.model_dump(mode="json")
     scan = ScanRun(

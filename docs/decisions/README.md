@@ -25,10 +25,11 @@ supersedes the old one, so the history of *why* is preserved.
 | [0017](0017-azure-connector.md) | Azure connector: pipeline guard, client access, dev identity | Accepted |
 | [0018](0018-rule-expansion-r1.md) | Rule expansion R1: credential report exception, no guessing, ARM lists | Accepted |
 | [0019](0019-api-worker-and-pre-auth-boundary.md) | Data API, scan worker, and the boundary before user authentication | Accepted (partly superseded by 0020) |
-| [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted |
+| [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted (lockout amended by 0025) |
 | [0021](0021-dashboard.md) | Dashboard: same-origin React app with a strict Content-Security-Policy | Accepted |
 | [0022](0022-pdf-reports.md) | PDF reports: WeasyPrint with escaped templates and no resource fetching | Accepted |
 | [0023](0023-finding-review-and-finalization.md) | Finding review layer and assessment finalization | Accepted |
 | [0024](0024-onboarding-and-public-showcase.md) | First-run setup, invitation links, public showcase page, redesign | Accepted |
+| [0025](0025-least-privilege-and-security-review.md) | Generated least-privilege permissions; M13 security review fixes | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

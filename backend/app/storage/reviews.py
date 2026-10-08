@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import Severity
 from app.domain.reviews import Review
+from app.storage import repository as repo
 from app.storage.models import (
     REVIEW_STATUSES_NEEDING_JUSTIFICATION,
     Assessment,
@@ -73,11 +74,7 @@ def set_review(
     actor: str,
 ) -> tuple[FindingReview, FindingReviewEvent]:
     """Record a decision (replacing the current one) and append it to the history."""
-    assessment = session.scalar(
-        select(Assessment).where(Assessment.id == assessment_id, Assessment.client_id == client_id)
-    )
-    if assessment is None:
-        raise NotFoundError("assessment not found")
+    assessment = repo.get_assessment(session, client_id, assessment_id, for_update=True)
     if assessment.status == AssessmentStatus.FINALIZED:
         raise ReviewNotAllowed("This assessment is finalized. Reopen it to change reviews.")
     in_assessment = session.scalar(

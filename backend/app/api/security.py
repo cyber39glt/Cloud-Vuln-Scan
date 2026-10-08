@@ -55,10 +55,21 @@ _DOCS_PATHS = ("/docs", "/openapi.json")
 _IMMUTABLE_PATHS = ("/assets/",)
 
 
+# Added in production only (served over HTTPS there): browsers then refuse plain
+# HTTP for this site for a year, so a network attacker cannot strip TLS.
+HSTS = "max-age=31536000; includeSubDomains"
+# Isolation headers: no camera/microphone/etc., and no window sharing with other sites.
+EXTRA_HEADERS = {
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+
 class SecurityMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp, allowed_hosts: list[str]) -> None:
+    def __init__(self, app: ASGIApp, allowed_hosts: list[str], production: bool = False) -> None:
         super().__init__(app)
         self.allowed_hosts = {h.lower() for h in allowed_hosts}
+        self.production = production
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method in UNSAFE_METHODS:
@@ -79,7 +90,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 )
         response = await call_next(request)
         path = request.url.path
-        headers = dict(SECURITY_HEADERS)
+        headers = SECURITY_HEADERS | EXTRA_HEADERS
+        if self.production:
+            headers["Strict-Transport-Security"] = HSTS
         if path.startswith(_DOCS_PATHS):
             del headers["Content-Security-Policy"]
         elif not path.startswith(_API_PATHS):

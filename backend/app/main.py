@@ -35,7 +35,11 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if docs_enabled else None,
     )
     # Middleware runs outermost-last-added: the host check happens first.
-    application.add_middleware(SecurityMiddleware, allowed_hosts=settings.api_allowed_hosts)
+    application.add_middleware(
+        SecurityMiddleware,
+        allowed_hosts=settings.api_allowed_hosts,
+        production=settings.is_production,
+    )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.api_allowed_hosts)
     install_error_handlers(application)
 

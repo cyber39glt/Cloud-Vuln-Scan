@@ -6,7 +6,7 @@ permissions, runs repeatable security checks, collects evidence, and produces
 reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
 dashboard, PDF, CSV and JSON outputs.
 
-> **Status: early development (milestone M12, finding review; new dashboard design).**
+> **Status: early development (milestone M13, hardening and security review).**
 > Consultants log in to a web dashboard (password + authenticator app), register client
 > AWS accounts and Azure subscriptions, run read-only scans with live progress (19
 > rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
@@ -90,6 +90,7 @@ All commands are run from the repository root as `.\scripts\dev.ps1 <command>`.
 | `logs` | Follow API and worker logs (Ctrl+C to stop following); `logs worker` for the worker only |
 | `test` | Run the backend test suite (extra args go to pytest, e.g. `test -k health`) |
 | `webtest` | Type-check and test the dashboard |
+| `policies` | Regenerate the least-privilege cloud permissions in `infra/` after adding or changing checks ([ADR 0025](docs/decisions/0025-least-privilege-and-security-review.md)) |
 | `lint` | Ruff lint + format check |
 | `format` | Auto-fix and format code with Ruff |
 | `secrets` | Scan git history for committed secrets (Gitleaks) |

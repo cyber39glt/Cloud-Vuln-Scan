@@ -228,6 +228,7 @@ def test_onboarding_instructions(api):
     ).json()["connection"]
     steps = api.get(f"/api/v1/clients/{client_id}/connections/{aws['id']}/onboarding").json()
     assert steps["external_id"] == aws["external_id"] and steps["provider"] == "aws"
+    assert "s3:ListAllMyBuckets" in steps["permissions"]
 
     azure = api.post(
         f"/api/v1/clients/{client_id}/connections/azure",
@@ -235,6 +236,9 @@ def test_onboarding_instructions(api):
     ).json()
     steps = api.get(f"/api/v1/clients/{client_id}/connections/{azure['id']}/onboarding").json()
     assert all(f"/subscriptions/{SUB}" in c for c in steps["role_commands"])
+    assert steps["role_definition"]["AssignableScopes"] == [f"/subscriptions/{SUB}"]
+    assert steps["role_definition"]["DataActions"] == []
+    assert len(steps["fallback_role_commands"]) == 2
     other = _client(api, "Globex")
     assert api.get(f"/api/v1/clients/{other}/connections/{aws['id']}/onboarding").status_code == 404
 
