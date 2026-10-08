@@ -333,14 +333,21 @@ def test_route_list_is_complete():
     assert ("GET", "/api/v1/clients/{client_id}/scans/{scan_id}/report") in routes
 
 
-PUBLIC = {("POST", "/api/v1/auth/login")}
+PUBLIC = {
+    ("POST", "/api/v1/auth/login"),
+    # First-run setup and invitations (ADR 0024): tested in test_onboarding.py.
+    ("GET", "/api/v1/setup"),
+    ("POST", "/api/v1/setup"),
+    ("POST", "/api/v1/invites/lookup"),
+    ("POST", "/api/v1/invites/accept"),
+}
 
 
 @pytest.mark.parametrize("method, path", _api_routes())
 def test_every_api_route_requires_a_session(http, method, path):
     """Adding an endpoint without the shared authentication dependency fails here."""
     if (method, path) in PUBLIC:
-        pytest.skip("the login endpoint itself")
+        pytest.skip("public by design")
     url = re.sub(r"\{[^}]+\}", str(uuid.uuid4()), path)
     response = http.request(method, url, json={})
     assert response.status_code == 401, (method, path, response.status_code)

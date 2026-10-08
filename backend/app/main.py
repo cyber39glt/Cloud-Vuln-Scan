@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import admin, assessments, auth, clients, health, overview, reviews
+from app.api import admin, assessments, auth, clients, health, onboarding, overview, reviews
 from app.api.security import SecurityMiddleware, install_error_handlers
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
 
     application.include_router(health.router)
     application.include_router(auth.router)
+    application.include_router(onboarding.router)
     application.include_router(admin.router)
     application.include_router(clients.router)
     application.include_router(assessments.router)

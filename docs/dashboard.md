@@ -4,9 +4,17 @@ The dashboard is the web interface of the platform. Start everything with
 `.\scripts\dev.ps1 up` and open **http://localhost:5173** (development).
 In production the API serves the dashboard itself at its own address.
 
-First time? Create your account and log in as described in [users.md](users.md).
+First time? Set up the first administrator and log in as described in
+[users.md](users.md).
 
-![Overview page](images/dashboard-overview.png)
+Visitors who are not logged in see a **public showcase page** listing the features and
+checks (no client data), with links to log in or, on a fresh installation, to set up.
+Use the sun/moon button to switch between the **dark** (default) and **light** theme;
+the choice is remembered in your browser.
+
+![Public showcase page (light theme)](images/landing.png)
+
+![Dashboard (dark theme)](images/dashboard-overview.png)
 
 ![Report page with one finding opened](images/dashboard-report.png)
 
@@ -16,12 +24,12 @@ First time? Create your account and log in as described in [users.md](users.md).
 
 | Page | What you do there |
 |---|---|
-| **Overview** | Every assessment you may see, with the severity counts of its latest scan and any scan in progress |
+| **Dashboard** | Open critical and high findings, counts (clients, assessments, scans in progress, finalized reports), a findings-by-severity chart, the most exposed assessments, and every assessment with the severity counts of its latest scan. Counts follow review decisions |
 | **Clients** | The clients you may access. Admins add new clients here |
 | **Client** | Register the client's AWS account or Azure subscription and show the client's **setup steps** (AWS role name + ExternalId; Azure consent link + role commands); create assessments |
 | **Assessment** | **Run read-only scan** (optionally limited to regions) and watch its progress live: connecting → collecting → evaluating → saving. Past scans and failures with a plain-language reason. **Finalize** the assessment when every finding is reviewed; Admins can **reopen** it with a reason |
 | **Report** | Findings by severity (click a tile to filter), search, category filter; each finding opens to show what is wrong, why it matters, the recommendation, the **evidence** and the CIS / NIST CSF 2.0 / SOC 2 references. Each finding has a **Review** panel: confirm, mark as false positive or accepted risk, or change the severity (a justification is required except for confirm), with the full decision history. **Confirm all remaining** confirms every finding without a decision. Checks that could not be evaluated are listed separately. **Download PDF report** (client-ready, see [exports.md](exports.md)), CSV or JSON |
-| **Users** (admins) | Create users (temporary password shown once), change roles, assign consultants to clients, deactivate, reset MFA or password |
+| **Users** (admins) | Invite people (one-time link), revoke pending invitations, change roles, assign consultants to clients, deactivate, reset MFA or password |
 | **Audit log** (admins) | Who did what and when: logins, changes, data views, scans, exports |
 | **Your account** (click your name) | Change your password; create new recovery codes |
 

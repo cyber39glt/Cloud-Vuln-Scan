@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = True
     max_failed_logins: int = Field(default=5, ge=3, le=20)
     lockout_minutes: int = Field(default=15, ge=1, le=1440)
+    # How long an invitation link works (ADR 0024).
+    invite_valid_hours: int = Field(default=48, ge=1, le=336)
 
     # The built dashboard (frontend/dist, copied here in the production image). When
     # missing (development), only the API is served; use the Vite dev server instead.
