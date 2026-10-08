@@ -22,7 +22,7 @@
     <tr><th>Scope</th><td>{{ regions }}</td></tr>
     <tr><th>Assessment date</th><td>{{ scan_date }}</td></tr>
     <tr><th>Report generated</th><td>{{ generated }}</td></tr>
-    <tr><th>Status</th><td>{% if draft %}<strong>DRAFT</strong> — findings not yet reviewed and finalized{% else %}Final{% endif %}</td></tr>
+    <tr><th>Status</th><td>{% if draft %}<strong>DRAFT</strong> — not finalized; findings and review decisions may still change{% else %}<strong>Final</strong> — reviewed and finalized {{ finalized_on }} by {{ r.source.finalized_by }}{% endif %}</td></tr>
   </table>
   <div class="cover-classification">CONFIDENTIAL — contains security-sensitive information about {{ r.source.client_name }}. Share only with authorized recipients.</div>
 </section>
@@ -68,6 +68,13 @@
   </ul>
   {% else %}
   <p>No critical or high severity issues were found.</p>
+  {% endif %}
+
+  {% if accepted_risks or false_positives %}
+  <p>After review, {{ accepted_risks|length }} finding{{ "" if accepted_risks|length == 1 else "s" }}
+  {{ "was" if accepted_risks|length == 1 else "were" }} recorded as <strong>accepted risk</strong> and
+  {{ false_positives|length }} as <strong>false positive</strong>{{ "" if false_positives|length == 1 else "s" }};
+  they are not counted above and are listed with their justification in Appendix B.</p>
   {% endif %}
 
   {% if not_evaluated %}
@@ -158,7 +165,9 @@
       <tbody>
       {% for i in g.instances %}
         <tr><td><strong>{{ i.resource }}</strong>{% if i.resource_id %}<div class="mono tiny">{{ i.resource_id }}</div>{% endif %}</td>
-            <td>{{ i.region }}</td><td>{{ i.message }}</td></tr>
+            <td>{{ i.region }}</td><td>{{ i.message }}
+            {% if i.adjustment %}<div class="adjusted">{{ i.adjustment }}</div>{% endif %}
+            {% if i.review_status == "confirmed" %}<div class="tiny">Confirmed on review</div>{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -207,12 +216,43 @@
   <p>No findings, so no framework references.</p>
   {% endfor %}
 
-  <h1>Appendix B. Notes and integrity</h1>
+  <h1>Appendix B. Review decisions</h1>
+  <p>Findings recorded during review as an accepted risk (a real weakness the client has
+  decided to accept) or a false positive (not an actual weakness in this environment).
+  They are excluded from the counts in the executive summary.</p>
+  <h2>Accepted risks</h2>
+  {% if accepted_risks %}
+  <table class="list small">
+    <thead><tr><th>Finding</th><th>Resource</th><th>Justification</th><th>Decided</th></tr></thead>
+    <tbody>
+    {% for d in accepted_risks %}
+      <tr><td><span class="badge sev-{{ d.severity }}">{{ d.severity|capitalize }}</span> {{ d.title }}</td>
+          <td>{{ d.resource }} <span class="muted">{{ d.region }}</span></td>
+          <td>{{ d.justification }}</td><td>{{ d.reviewed_by }}<br>{{ d.reviewed_at }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p>None.</p>{% endif %}
+  <h2>False positives</h2>
+  {% if false_positives %}
+  <table class="list small">
+    <thead><tr><th>Finding</th><th>Resource</th><th>Justification</th><th>Decided</th></tr></thead>
+    <tbody>
+    {% for d in false_positives %}
+      <tr><td>{{ d.title }}</td><td>{{ d.resource }} <span class="muted">{{ d.region }}</span></td>
+          <td>{{ d.justification }}</td><td>{{ d.reviewed_by }}<br>{{ d.reviewed_at }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p>None.</p>{% endif %}
+
+  <h1>Appendix C. Notes and integrity</h1>
   {% for note in r.notes %}<p>{{ note }}</p>{% endfor %}
   <table class="kv small">
     <tr><th>Scan ID</th><td class="mono">{{ r.source.scan_id }}</td></tr>
     <tr><th>Scan SHA-256</th><td class="mono">{{ r.source.scan_sha256 }}</td></tr>
     <tr><th>Report format</th><td>Generated from report dataset version {{ r.schema_version }}; the same data is available as JSON and CSV.</td></tr>
+    {% if not draft %}<tr><th>Finalized</th><td>{{ finalized_on }} by {{ r.source.finalized_by }}. This report is reproduced from the frozen, hash-verified snapshot taken at finalization.</td></tr>{% endif %}
   </table>
   <p class="muted">The SHA-256 value identifies the stored scan result this report was produced
   from. The platform verifies it every time a report is generated.</p>

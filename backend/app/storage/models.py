@@ -63,6 +63,19 @@ class AssessmentStatus(StrEnum):
     FINALIZED = "finalized"  # locked for reporting (M12)
 
 
+class ReviewStatus(StrEnum):
+    """A consultant's decision about a finding (ADR 0007)."""
+
+    OPEN = "open"  # not reviewed yet
+    CONFIRMED = "confirmed"  # reviewed: a real issue, reported
+    FALSE_POSITIVE = "false_positive"  # not a real issue: excluded from the report body
+    ACCEPTED_RISK = "accepted_risk"  # real, but the client accepts it: reported separately
+
+
+# Decisions that must be explained in writing.
+REVIEW_STATUSES_NEEDING_JUSTIFICATION = (ReviewStatus.FALSE_POSITIVE, ReviewStatus.ACCEPTED_RISK)
+
+
 class ScanStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
@@ -352,6 +365,108 @@ class AuditEvent(Base):
         Index("ix_audit_events_time", "occurred_at"),
         Index("ix_audit_events_client", "client_id", "occurred_at"),
         Index("ix_audit_events_actor", "actor_user_id", "occurred_at"),
+    )
+
+
+# ------------------------------------------------------------------ review layer (M12)
+
+
+class FindingReview(Base):
+    """The CURRENT review decision for one finding of an assessment. Keyed by the
+    finding's stable fingerprint, so a decision carries over to a rescan of the same
+    assessment. The scan results themselves are never changed."""
+
+    __tablename__ = "finding_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID]
+    assessment_id: Mapped[uuid.UUID]
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[ReviewStatus] = mapped_column(_enum(ReviewStatus, "review_status"))
+    severity_override: Mapped[Severity | None] = mapped_column(_enum(Severity, "severity_override"))
+    justification: Mapped[str | None] = mapped_column(String(2000))
+    updated_by_user_id: Mapped[uuid.UUID | None]
+    updated_by: Mapped[str] = mapped_column(String(254))  # e-mail, or "cli"
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["assessment_id", "client_id"],
+            ["assessments.id", "assessments.client_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("assessment_id", "fingerprint"),
+        CheckConstraint(
+            "(status NOT IN ('false_positive', 'accepted_risk') AND severity_override IS NULL)"
+            " OR length(trim(coalesce(justification, ''))) >= 10",
+            name="decision_justified",
+        ),
+    )
+
+
+class FindingReviewEvent(Base):
+    """History of review decisions (who changed what, when, why). Rows are never
+    updated (database trigger); they are removed only with their assessment."""
+
+    __tablename__ = "finding_review_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID]
+    assessment_id: Mapped[uuid.UUID]
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    actor_user_id: Mapped[uuid.UUID | None]
+    actor: Mapped[str] = mapped_column(String(254))
+    status: Mapped[ReviewStatus] = mapped_column(_enum(ReviewStatus, "review_status"))
+    severity_override: Mapped[Severity | None] = mapped_column(_enum(Severity, "severity_override"))
+    justification: Mapped[str | None] = mapped_column(String(2000))
+    previous_status: Mapped[ReviewStatus | None] = mapped_column(
+        _enum(ReviewStatus, "previous_review_status")
+    )
+    previous_severity_override: Mapped[Severity | None] = mapped_column(
+        _enum(Severity, "previous_severity_override")
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["assessment_id", "client_id"],
+            ["assessments.id", "assessments.client_id"],
+            ondelete="CASCADE",
+        ),
+        Index("ix_finding_review_events_finding", "assessment_id", "fingerprint", "occurred_at"),
+    )
+
+
+class AssessmentFinalization(Base):
+    """A finalized assessment: the reviewed report dataset, frozen, with its SHA-256.
+    Every output of a finalized assessment is rendered from this snapshot. Rows are
+    never updated; reopening an assessment keeps them as history."""
+
+    __tablename__ = "assessment_finalizations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[uuid.UUID]
+    assessment_id: Mapped[uuid.UUID]
+    scan_run_id: Mapped[uuid.UUID]
+    finalized_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    finalized_by_user_id: Mapped[uuid.UUID | None]
+    finalized_by: Mapped[str] = mapped_column(String(254))
+    report: Mapped[dict[str, Any]] = mapped_column(JsonType)
+    report_sha256: Mapped[str] = mapped_column(String(64))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["assessment_id", "client_id"],
+            ["assessments.id", "assessments.client_id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["scan_run_id", "client_id"],
+            ["scan_runs.id", "scan_runs.client_id"],
+            ondelete="CASCADE",
+        ),
+        Index("ix_assessment_finalizations_assessment", "assessment_id", "finalized_at"),
+        CheckConstraint("length(report_sha256) = 64", name="final_report_hash_length"),
     )
 
 

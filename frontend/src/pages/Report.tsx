@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { download } from "../api";
+import { api, download } from "../api";
+import { REVIEW_LABEL, ReviewPanel } from "../components/ReviewPanel";
 import { ErrorBox, Loading, Notice, PageHeader, SeverityBadge, SeverityBar, Tag } from "../components/ui";
 import { formatDate, humanize, providerLabel, SEVERITY_LABEL, slug } from "../format";
 import { useAction, useApi } from "../hooks";
@@ -9,7 +10,8 @@ import { SEVERITIES, type Finding, type Report, type Severity } from "../types";
 export function ReportPage() {
   const { clientId, scanId } = useParams();
   const path = `/clients/${clientId}/scans/${scanId}/report`;
-  const { data: report, error, notFound } = useApi<Report>(path);
+  const { data: report, error, notFound, reload } = useApi<Report>(path);
+  const bulk = useAction();
   const [severities, setSeverities] = useState<Set<Severity>>(new Set());
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
@@ -32,6 +34,19 @@ export function ReportPage() {
   if (!report) return error ? <ErrorBox message={error} /> : <Loading />;
 
   const name = `${slug(report.source.client_name)}_${report.source.scan_id.slice(0, 8)}`;
+  const reviewBase = `/clients/${clientId}/assessments/${report.source.assessment_id}`;
+  const final = report.source.report_status === "final";
+  // Reviews can change only while the assessment is not finalized.
+  const editable = !final && report.source.assessment_status !== "finalized";
+  const counts = report.summary.by_review_status;
+  const allFindings = report.findings.length + report.accepted_risks.length + report.false_positives.length;
+  const unreviewed = counts.open ?? 0;
+
+  async function confirmRemaining() {
+    if (!window.confirm(`Mark the ${unreviewed} finding(s) not yet reviewed as confirmed?`)) return;
+    const done = await bulk.run(() => api.post(`${reviewBase}/reviews/confirm-remaining`, { scan_id: report!.source.scan_id }));
+    if (done !== undefined) await reload();
+  }
   const categories = Object.entries(report.summary.by_category).filter(([, n]) => n > 0);
 
   function toggle(severity: Severity) {
@@ -67,6 +82,30 @@ export function ReportPage() {
         }
       />
       <ErrorBox message={downloads.error} />
+      {final ? (
+        <Notice kind="ok">
+          <strong>Final report</strong> — finalized {formatDate(report.source.finalized_at)} by {report.source.finalized_by}. This is
+          the frozen, reviewed version delivered to the client; it can no longer change.
+        </Notice>
+      ) : (
+        <Notice kind={unreviewed > 0 ? "warn" : "info"}>
+          <strong>Draft</strong> — {allFindings - unreviewed} of {allFindings} findings reviewed
+          {counts.false_positive ? `, ${counts.false_positive} false positive(s)` : ""}
+          {counts.accepted_risk ? `, ${counts.accepted_risk} accepted risk(s)` : ""}.{" "}
+          {editable &&
+            (unreviewed > 0 ? (
+              <button className="btn btn-small" disabled={bulk.busy} onClick={() => void confirmRemaining()}>
+                Confirm all {unreviewed} remaining
+              </button>
+            ) : (
+              <>
+                All reviewed: finalize it on the{" "}
+                <Link to={`/clients/${clientId}/assessments/${report.source.assessment_id}`}>assessment page</Link>.
+              </>
+            ))}
+          <ErrorBox message={bulk.error} />
+        </Notice>
+      )}
 
       <section className="tiles">
         {SEVERITIES.map((s) => (
@@ -119,11 +158,31 @@ export function ReportPage() {
         ) : (
           <div className="findings">
             {findings.map((f) => (
-              <FindingRow key={f.finding_id} finding={f} />
+              <FindingRow key={f.finding_id} finding={f} basePath={reviewBase} editable={editable} onSaved={() => void reload()} />
             ))}
           </div>
         )}
       </section>
+
+      {[
+        { title: "Accepted risks", items: report.accepted_risks, note: "Real weaknesses the client has decided to accept. Not counted above." },
+        { title: "False positives", items: report.false_positives, note: "Not actual weaknesses in this environment. Excluded from the report body." },
+      ].map(
+        (section) =>
+          section.items.length > 0 && (
+            <section className="card" key={section.title}>
+              <h2>
+                {section.title} ({section.items.length})
+              </h2>
+              <p className="muted">{section.note}</p>
+              <div className="findings">
+                {section.items.map((f) => (
+                  <FindingRow key={f.finding_id} finding={f} basePath={reviewBase} editable={editable} onSaved={() => void reload()} />
+                ))}
+              </div>
+            </section>
+          ),
+      )}
 
       <section className="notes muted">
         {report.notes.map((n) => (
@@ -137,12 +196,26 @@ export function ReportPage() {
   );
 }
 
-function FindingRow({ finding: f }: { finding: Finding }) {
+function FindingRow({
+  finding: f,
+  basePath,
+  editable,
+  onSaved,
+}: {
+  finding: Finding;
+  basePath: string;
+  editable: boolean;
+  onSaved: () => void;
+}) {
   return (
     <details className="finding">
       <summary>
         <SeverityBadge severity={f.severity} />
-        <span className="finding-title">{f.title}</span>
+        <span className="finding-title">
+          {f.title}{" "}
+          {f.review.status !== "open" && <Tag kind={`review-${f.review.status}`}>{REVIEW_LABEL[f.review.status]}</Tag>}
+          {f.review.severity_overridden && <Tag kind="queued">Severity adjusted</Tag>}
+        </span>
         <span className="finding-resource">
           {f.resource_name ?? "Account-wide"}
           {f.region && <span className="muted"> · {f.region}</span>}
@@ -182,6 +255,7 @@ function FindingRow({ finding: f }: { finding: Finding }) {
             </li>
           ))}
         </ul>
+        <ReviewPanel finding={f} basePath={basePath} editable={editable} onSaved={onSaved} />
       </div>
     </details>
   );

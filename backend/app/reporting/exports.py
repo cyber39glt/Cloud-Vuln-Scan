@@ -13,8 +13,8 @@ import io
 import json
 
 from app.domain.enums import Framework
-from app.domain.findings import Finding, FrameworkRef
-from app.reporting.report import AssessmentReport
+from app.domain.findings import FrameworkRef
+from app.reporting.report import AssessmentReport, ReportFinding
 
 _FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 
@@ -39,6 +39,11 @@ CSV_COLUMNS = (
     "evidence",
     "evidence_source",
     "detected_at",
+    "review_status",
+    "original_severity",
+    "review_justification",
+    "reviewed_by",
+    "report_status",
     "client",
     "assessment",
     "scan_id",
@@ -58,7 +63,7 @@ def _refs(refs: tuple[FrameworkRef, ...], *frameworks: Framework) -> str:
     )
 
 
-def _row(finding: Finding, report: AssessmentReport) -> list[str]:
+def _row(finding: ReportFinding, report: AssessmentReport) -> list[str]:
     values = {
         "finding_id": finding.finding_id,
         "severity": finding.severity.value,
@@ -80,6 +85,11 @@ def _row(finding: Finding, report: AssessmentReport) -> list[str]:
         "evidence": " | ".join(e.summary for e in finding.evidence),
         "evidence_source": " | ".join(e.source_operation for e in finding.evidence),
         "detected_at": finding.detected_at.isoformat(),
+        "review_status": finding.review.status,
+        "original_severity": finding.review.original_severity.value,
+        "review_justification": finding.review.justification or "",
+        "reviewed_by": finding.review.reviewed_by or "",
+        "report_status": report.source.report_status,
         "client": report.source.client_name,
         "assessment": report.source.assessment_name,
         "scan_id": str(report.source.scan_id),
@@ -88,12 +98,14 @@ def _row(finding: Finding, report: AssessmentReport) -> list[str]:
 
 
 def to_csv(report: AssessmentReport) -> bytes:
-    """One row per finding, most severe first. UTF-8 with a byte-order mark, which
-    Excel on Windows needs to display non-English characters correctly."""
+    """One row per finding: reported findings (most severe first), then accepted
+    risks, then false positives; the review_status column tells them apart. UTF-8
+    with a byte-order mark, which Excel on Windows needs for non-English characters."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
     writer.writerow(CSV_COLUMNS)
-    writer.writerows(_row(finding, report) for finding in report.findings)
+    for findings in (report.findings, report.accepted_risks, report.false_positives):
+        writer.writerows(_row(finding, report) for finding in findings)
     return buffer.getvalue().encode("utf-8-sig")
 
 

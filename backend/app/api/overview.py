@@ -6,7 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.auth import service
@@ -18,12 +18,16 @@ from app.storage.models import (
     Client,
     CloudConnection,
     FindingRecord,
+    FindingReview,
     JobStatus,
+    ReviewStatus,
     ScanJob,
     ScanRun,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["overview"])
+
+EXCLUDED_FROM_TOTALS = (ReviewStatus.FALSE_POSITIVE, ReviewStatus.ACCEPTED_RISK)
 
 
 class LatestScan(BaseModel):
@@ -82,13 +86,27 @@ def overview(db: DbSession, user: CurrentUser) -> Overview:
             .distinct(ScanRun.assessment_id)
         )
     }
+    # Severity counts as the report shows them: review decisions applied (false
+    # positives and accepted risks left out, adjusted severities used).
+    decisions = {
+        (r.assessment_id, r.fingerprint): r
+        for r in db.scalars(
+            select(FindingReview).where(FindingReview.assessment_id.in_(assessment_ids))
+        )
+    }
+    scan_assessment = {scan.id: scan.assessment_id for scan in latest.values()}
     counts: dict[uuid.UUID, dict[Severity, int]] = {}
-    for scan_id, severity, count in db.execute(
-        select(FindingRecord.scan_run_id, FindingRecord.severity, func.count())
-        .where(FindingRecord.scan_run_id.in_([s.id for s in latest.values()]))
-        .group_by(FindingRecord.scan_run_id, FindingRecord.severity)
+    for scan_id, fingerprint, severity in db.execute(
+        select(FindingRecord.scan_run_id, FindingRecord.fingerprint, FindingRecord.severity).where(
+            FindingRecord.scan_run_id.in_(list(scan_assessment))
+        )
     ):
-        counts.setdefault(scan_id, {})[severity] = count
+        review = decisions.get((scan_assessment[scan_id], fingerprint))
+        if review is not None and review.status in EXCLUDED_FROM_TOTALS:
+            continue
+        effective = (review.severity_override if review else None) or severity
+        bucket = counts.setdefault(scan_id, {})
+        bucket[effective] = bucket.get(effective, 0) + 1
     active = {
         job.assessment_id: job
         for job in db.scalars(

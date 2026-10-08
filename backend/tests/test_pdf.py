@@ -18,7 +18,7 @@ from tests.factories import ingress, inventory, security_group
 HOSTILE = '<img src="http://169.254.169.254/latest/meta-data/"><b>x</b>{{ 7*7 }}'
 
 
-def _report(client_name="Demo Client", status="in_review", result=None):
+def _report(client_name="Demo Client", status="in_review", result=None, report_status="draft"):
     return build_report(
         result or RuleEngine().run(sample_aws_inventory()),
         ReportSource(
@@ -29,6 +29,7 @@ def _report(client_name="Demo Client", status="in_review", result=None):
             assessment_status=status,
             scan_id=uuid.uuid4(),
             scan_sha256="a" * 64,
+            report_status=report_status,
         ),
     )
 
@@ -65,7 +66,7 @@ def test_pdf_has_the_report_content(sample_pdf):
 
 
 def test_final_report_is_not_marked_draft():
-    assert "DRAFT" not in _text(pdf.to_pdf(_report(status="finalized")))
+    assert "DRAFT" not in _text(pdf.to_pdf(_report(status="finalized", report_status="final")))
 
 
 def test_report_without_findings():
