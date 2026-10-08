@@ -58,7 +58,7 @@ x-app-env: &app-env
 
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cloudsecura}
       POSTGRES_USER: ${POSTGRES_OWNER_USER:-cloudsecura_owner}
@@ -162,7 +162,7 @@ services:
   # Nightly compressed database dump, kept 14 days (copy them off the server too:
   # docs/deployment.md, "Backups").
   backup:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     command:
       - sh
       - -c
