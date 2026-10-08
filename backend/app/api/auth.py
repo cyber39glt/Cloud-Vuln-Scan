@@ -182,7 +182,7 @@ def mfa_verify(
     body: VerifyRequest, principal: AnySession, db: DbSession, settings: AppSettings, ip: Ip
 ) -> Response:
     if (body.code is None) == (body.recovery_code is None):
-        return _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "Send either code or recovery_code.")
+        return _error(status.HTTP_422_UNPROCESSABLE_CONTENT, "Send either code or recovery_code.")
     if principal.session.mfa_verified:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     ok = service.verify_second_factor(
