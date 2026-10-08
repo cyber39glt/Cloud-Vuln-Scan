@@ -5,7 +5,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi.routing import APIRoute
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
@@ -13,7 +12,7 @@ from app.auth import mfa, passwords
 from app.auth.ratelimit import SlidingWindowLimiter
 from app.main import app
 from app.storage.models import AuditEvent, Role, User, UserSession
-from tests.auth_helpers import PASSWORD, login, make_user, totp
+from tests.auth_helpers import PASSWORD, login, make_user, plain_http_settings, totp
 
 pytestmark = pytest.mark.integration
 
@@ -77,10 +76,7 @@ def test_mfa_secret_is_encrypted_at_rest(http, db):
     secret = http.post("/api/v1/auth/mfa/setup", json={}).json()["secret"]
     stored = _fresh(db, user).mfa_secret_encrypted
     assert secret not in stored
-    assert (
-        mfa.decrypt_secret(stored, "insecure-development-only-key-never-use-in-production")
-        == secret
-    )
+    assert mfa.decrypt_secret(stored, plain_http_settings().secret_key) == secret
     with pytest.raises(mfa.MfaKeyError):
         mfa.decrypt_secret(stored, "a different key entirely, so decryption must fail")
 
@@ -180,10 +176,11 @@ def test_session_cookie_is_protected_and_stored_hashed(http, db):
     assert token not in stored and len(stored[0]) == 64
 
 
-def test_secure_cookie_by_default(db, http):
+def test_secure_cookie_by_default(monkeypatch):
     from app.auth import sessions
     from app.core.config import Settings
 
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
     secure = Settings(_env_file=None)
     assert secure.session_cookie_secure is True
     assert sessions.cookie_name(secure) == "__Host-cvs_session"
@@ -317,17 +314,29 @@ def test_admin_password_reset_returns_a_one_time_password(api, db):
 # ------------------------------------------------------------------ every route is protected
 
 
-def _api_routes():
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path.startswith("/api/"):
-            for method in route.methods:
-                yield method, route.path
+def _api_routes() -> list[tuple[str, str]]:
+    """Every API operation, read from the same route list FastAPI uses for its schema
+    (included routers are nested, so app.routes alone does not list them)."""
+    paths = app.openapi()["paths"]
+    return sorted(
+        (method.upper(), path)
+        for path, operations in paths.items()
+        if path.startswith("/api/")
+        for method in operations
+    )
+
+
+def test_route_list_is_complete():
+    """Guards the test below: it must never silently check zero routes."""
+    routes = _api_routes()
+    assert len(routes) >= 30
+    assert ("GET", "/api/v1/clients/{client_id}/scans/{scan_id}/report") in routes
 
 
 PUBLIC = {("POST", "/api/v1/auth/login")}
 
 
-@pytest.mark.parametrize("method, path", sorted(_api_routes()))
+@pytest.mark.parametrize("method, path", _api_routes())
 def test_every_api_route_requires_a_session(http, method, path):
     """Adding an endpoint without the shared authentication dependency fails here."""
     if (method, path) in PUBLIC:

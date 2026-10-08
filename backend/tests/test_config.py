@@ -4,6 +4,15 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def _no_settings_from_environment(monkeypatch):
+    """The test container receives .env as environment variables (CI changes some of
+    them). Remove every variable that maps to a setting, so these tests see the
+    defaults; tests that need one set it themselves."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 def make_settings(**overrides) -> Settings:
     # _env_file=None: ignore any local .env so tests are deterministic.
     return Settings(_env_file=None, **overrides)

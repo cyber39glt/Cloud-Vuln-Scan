@@ -120,4 +120,4 @@ def install_error_handlers(app: FastAPI) -> None:
             {"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", "")}
             for e in exc.errors()
         ]
-        return JSONResponse({"detail": errors}, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        return JSONResponse({"detail": errors}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
