@@ -249,4 +249,4 @@ The same container image runs everywhere; only environment variables differ
 | **M12** | **Finding review and finalization** ✓ ([ADR 0023](decisions/0023-finding-review-and-finalization.md)) |
 | **M13** | **Hardening: threat model, generated least-privilege policies, security review** ✓ ([threat model](threat-model.md), [ADR 0025](decisions/0025-least-privilege-and-security-review.md)) |
 | **M14** | **Hosting evaluation and deployment** ✓ deployment-ready ([guide](deployment.md), [hosting options](hosting.md), [ADR 0026](decisions/0026-production-deployment.md)); host choice pending |
-| M15 | Documentation, license decision, public release |
+| **M15** | **Documentation, licence (Apache-2.0), public release preparation** ✓ ([ADR 0027](decisions/0027-licence-and-public-release.md)); owner steps: [release checklist](release-checklist.md) |

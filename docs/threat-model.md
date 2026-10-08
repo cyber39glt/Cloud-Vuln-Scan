@@ -92,7 +92,7 @@ These are known and not yet fixed. Each has an owner milestone.
 | AWS S3 region redirects without a region header make botocore call `HeadBucket`, which the guard blocks: that scan fails (safely) | `HeadBucket` needs `s3:ListBucket`, which also lists object names; not granted on purpose | Accepted (rare) |
 | With a region restriction, S3 buckets and Azure resources outside the regions are still read, then discarded | The APIs list account-wide | Accepted (configuration only) |
 | Lists and exports are not paginated or rate-limited for logged-in users | Authenticated users only; impact is load, not data exposure | Later |
-| CI actions and base images are pinned by tag, not by immutable digest | Low risk with a read-only CI token | M15 (before public release) |
+| ~~CI actions pinned by tag~~ | **Fixed in M15**: actions pinned to commit SHAs, Dependabot keeps them current. Base images stay on version tags (security patches on rebuild) by decision ([ADR 0027](decisions/0027-licence-and-public-release.md)) | Done |
 | ~~Container runtime hardening~~ | **Fixed in M14**: read-only file systems, no capabilities, no privilege escalation, network isolation | Done |
 | An admin can reset another admin's password and MFA | By design (equal admins); every reset is audited | Accepted |
 | Real AWS/Azure behaviour of the least-privilege permissions is tested against simulated APIs only | No live account in development | First sandbox test (docs/aws-connection.md, docs/azure-connection.md) |

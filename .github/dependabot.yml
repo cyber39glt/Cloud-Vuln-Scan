@@ -1,0 +1,23 @@
+# Dependabot proposes updates as pull requests; CI (tests, audits, production
+# stack) runs on each before anything is merged.
+version: 2
+updates:
+  - package-ecosystem: github-actions # also keeps the pinned commit SHAs current
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: uv
+    directory: /backend
+    schedule: { interval: weekly }
+    groups:
+      python-minor-and-patch: { update-types: [minor, patch] }
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    groups:
+      dashboard-minor-and-patch: { update-types: [minor, patch] }
+  - package-ecosystem: docker # base images in backend/Dockerfile
+    directory: /backend
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose # images in deploy/compose.prod.yml
+    directory: /deploy
+    schedule: { interval: weekly }

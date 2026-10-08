@@ -1,0 +1,21 @@
+name: Feature or new check
+description: Suggest an improvement or a new security check.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What problem would this solve?
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: For a new check, name the read-only API calls it needs and the framework controls it relates to.
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Read-only boundary
+      options:
+        - label: This needs read access only; it never changes a client environment.
+          required: true
