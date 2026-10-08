@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     docs_enabled = not settings.is_production
 
     application = FastAPI(
-        title="Cloud Vuln Scan API",
+        title="CloudSecura API",
         description="Read-only cloud security assessment platform for AWS and Azure.",
         version="0.1.0",
         docs_url="/docs" if docs_enabled else None,

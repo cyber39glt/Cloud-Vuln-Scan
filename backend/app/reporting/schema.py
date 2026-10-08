@@ -17,7 +17,7 @@ SCHEMA_PATH = Path(__file__).parents[2] / "schemas" / "assessment-report.schema.
 def report_json_schema() -> dict:
     schema = AssessmentReport.model_json_schema(mode="serialization")
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema["title"] = f"Cloud Vuln Scan assessment report v{REPORT_SCHEMA_VERSION}"
+    schema["title"] = f"CloudSecura assessment report v{REPORT_SCHEMA_VERSION}"
     return schema
 
 

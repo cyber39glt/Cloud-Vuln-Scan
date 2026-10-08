@@ -729,6 +729,6 @@
     "not_evaluated",
     "check_results"
   ],
-  "title": "Cloud Vuln Scan assessment report v1.1",
+  "title": "CloudSecura assessment report v1.1",
   "type": "object"
 }

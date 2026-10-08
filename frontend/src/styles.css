@@ -1,4 +1,4 @@
-/* Cloud Vuln Scan dashboard. Plain CSS, no inline styles (the CSP forbids them).
+/* CloudSecura dashboard. Plain CSS, no inline styles (the CSP forbids them).
    Two themes: dark (default) and light, chosen with the switch in the sidebar and
    stored per browser. Severity colours were checked for colour-blind separation. */
 

@@ -1,4 +1,4 @@
-# Cloud Vuln Scan
+# CloudSecura
 
 A **read-only cloud security assessment platform** for security consultancies.
 It connects to a client's **AWS** or **Microsoft Azure** environment with read-only

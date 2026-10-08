@@ -5,7 +5,7 @@ export const X_HANDLE = "cyber39glt";
 export const X_URL = `https://x.com/${X_HANDLE}`;
 
 /** The shield logo plus the product name. */
-export function Brand({ name = "Cloud Vuln Scan", product, large = false }: { name?: string; product?: string; large?: boolean }) {
+export function Brand({ name = "CloudSecura", product, large = false }: { name?: string; product?: string; large?: boolean }) {
   return (
     <div className={`brand ${large ? "brand-large" : ""}`}>
       <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">

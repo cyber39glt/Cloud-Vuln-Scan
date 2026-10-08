@@ -33,6 +33,8 @@ def _fernet(secret_key: str) -> Fernet:
     key = HKDF(
         algorithm=hashes.SHA256(),
         length=32,
+        # Fixed forever (the project's original name): changing it would make every
+        # stored MFA secret unreadable.
         salt=b"cloud-vuln-scan",
         info=b"totp-secret-encryption-v1",
     ).derive(secret_key.encode("utf-8"))

@@ -24,7 +24,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className={`app ${menuOpen ? "menu-open" : ""}`}>
       <aside className="sidebar" aria-label="Main navigation">
-        <Brand name={me.consultancy} product="Cloud Vuln Scan" />
+        <Brand name={me.consultancy} product="CloudSecura" />
         <nav className="nav">
           <span className="nav-section">Assess</span>
           <NavLink to="/" end>

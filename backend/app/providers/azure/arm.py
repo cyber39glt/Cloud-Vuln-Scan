@@ -31,7 +31,7 @@ class ArmReader:
             policies=[
                 ReadOnlyPolicy(assessment_permissions()),
                 HeadersPolicy(),
-                UserAgentPolicy(sdk_moniker="cloud-vuln-scan"),
+                UserAgentPolicy(sdk_moniker="cloudsecura"),
                 RetryPolicy(retry_total=3),
                 BearerTokenCredentialPolicy(credential, ARM_SCOPE),
             ],

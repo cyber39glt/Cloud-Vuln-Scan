@@ -93,7 +93,7 @@ function VerifyStep({ onDone, onRestart }: { onDone: () => void; onRestart: () =
       <p className="muted">
         {useRecovery
           ? "Enter one of your saved recovery codes. Each code works only once."
-          : "Open your authenticator app and enter the 6-digit code for Cloud Vuln Scan."}
+          : "Open your authenticator app and enter the 6-digit code for CloudSecura."}
       </p>
       <ErrorBox message={error === "Not logged in." ? "Too many attempts. Please log in again." : error} />
       <Field label={useRecovery ? "Recovery code" : "6-digit code"}>

@@ -30,7 +30,7 @@ CLIENT_CONFIG = Config(
     retries={"mode": "standard", "max_attempts": 5},
     connect_timeout=5,
     read_timeout=30,
-    user_agent_extra="cloud-vuln-scan",
+    user_agent_extra="cloudsecura",
 )
 
 ACCOUNT_ID_PATTERN = re.compile(r"^\d{12}$", re.ASCII)

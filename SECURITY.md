@@ -2,7 +2,7 @@
 
 ## What this platform is (and is not)
 
-Cloud Vuln Scan is a **defensive, read-only** cloud security assessment tool.
+CloudSecura is a **defensive, read-only** cloud security assessment tool.
 
 It **never**:
 
