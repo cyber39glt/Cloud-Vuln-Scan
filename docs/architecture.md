@@ -91,6 +91,15 @@ The same container image runs everywhere; only environment variables differ
 
 ## What exists today
 
+### M14: production deployment
+
+- `deploy/compose.prod.yml`: Caddy (automatic HTTPS), API, worker, PostgreSQL and a
+  backup container on one server; internal networks; hardened containers.
+- Restricted database login for the application; keyed integrity signatures on stored
+  results; real client addresses behind the proxy.
+- Step-by-step [deployment guide](deployment.md) and [hosting comparison](hosting.md);
+  CI starts the production stack and checks it.
+
 ### M13: hardening
 
 - Clients grant only the read permissions the checks use, generated from the code
@@ -239,5 +248,5 @@ The same container image runs everywhere; only environment variables differ
 | **M11** | **PDF report** ✓ ([ADR 0022](decisions/0022-pdf-reports.md)) |
 | **M12** | **Finding review and finalization** ✓ ([ADR 0023](decisions/0023-finding-review-and-finalization.md)) |
 | **M13** | **Hardening: threat model, generated least-privilege policies, security review** ✓ ([threat model](threat-model.md), [ADR 0025](decisions/0025-least-privilege-and-security-review.md)) |
-| M14 | Hosting evaluation and deployment |
+| **M14** | **Hosting evaluation and deployment** ✓ deployment-ready ([guide](deployment.md), [hosting options](hosting.md), [ADR 0026](decisions/0026-production-deployment.md)); host choice pending |
 | M15 | Documentation, license decision, public release |

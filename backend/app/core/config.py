@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # SecretStr hides the value in repr()/str(), so it cannot leak through
     # accidental logging or error messages.
     postgres_password: SecretStr = SecretStr("")
+    # The login that OWNS the tables and runs migrations (ADR 0026). Production
+    # requires it to differ from POSTGRES_USER, which then has restricted privileges
+    # (app/storage/dbroles.py). Empty in development: one login does everything.
+    postgres_owner_user: str = ""
+    postgres_owner_password: SecretStr = SecretStr("")
     db_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
 
     # The consultancy operating the platform. Appears in client-facing names (the
@@ -119,6 +124,16 @@ class Settings(BaseSettings):
             database=self.postgres_db,
         )
 
+    @property
+    def owner_database_url(self) -> URL:
+        """The migration login's URL (the application login's if none is set)."""
+        if not self.postgres_owner_user:
+            return self.database_url
+        return self.database_url.set(
+            username=self.postgres_owner_user,
+            password=self.postgres_owner_password.get_secret_value(),
+        )
+
     @model_validator(mode="after")
     def _check_production_safety(self) -> "Settings":
         """Refuse to start in production with an unsafe configuration."""
@@ -142,6 +157,11 @@ class Settings(BaseSettings):
                 )
             if not self.session_cookie_secure:
                 raise ValueError("SESSION_COOKIE_SECURE must be true in production")
+            if not self.postgres_owner_user or self.postgres_owner_user == self.postgres_user:
+                raise ValueError(
+                    "In production the application must not connect as the table owner: "
+                    "set POSTGRES_OWNER_USER (migrations) different from POSTGRES_USER"
+                )
         return self
 
 

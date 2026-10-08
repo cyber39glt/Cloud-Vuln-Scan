@@ -1,0 +1,203 @@
+# CloudSecura production stack for ONE Linux server (ADR 0026, docs/deployment.md).
+#
+#   Internet ──443──► caddy (HTTPS, automatic certificates) ──► api ──► db
+#                                                       worker ─┘  └──► client clouds (read-only)
+#
+# Run from this folder:   docker compose -f compose.prod.yml up -d --build
+# All settings come from ./.env (create it with ./init-env.sh; never commit it).
+#
+# Security choices, in short:
+# - Only caddy is reachable from outside (ports 80/443). The database and the API
+#   are on internal networks with no internet access; only the worker (cloud
+#   scans) and caddy (certificates) can reach the internet.
+# - Two database logins: the OWNER runs migrations and backups; the API and worker
+#   use a restricted login that cannot change tables, disable triggers, or alter
+#   history (app/storage/dbroles.py). Each container gets only the secrets it needs.
+# - Application containers: read-only file system, no Linux capabilities, no
+#   privilege escalation, non-root user, memory limits, log rotation.
+
+name: cloudsecura
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+x-app-image: &app-image
+  image: ${CLOUDSECURA_IMAGE:-cloudsecura:local}
+  build:
+    context: ../backend
+    target: prod
+    additional_contexts:
+      frontend: ../frontend
+
+# Settings shared by the API and the worker. Note what is NOT here: the database
+# owner's password.
+x-app-env: &app-env
+  APP_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  APP_SECRET_KEY: ${APP_SECRET_KEY:?run ./init-env.sh}
+  CONSULTANCY_NAME: ${CONSULTANCY_NAME:-SubtleTech}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:-cloudsecura}
+  POSTGRES_USER: ${POSTGRES_APP_USER:-cloudsecura_app}
+  POSTGRES_PASSWORD: ${POSTGRES_APP_PASSWORD:?run ./init-env.sh}
+  POSTGRES_OWNER_USER: ${POSTGRES_OWNER_USER:-cloudsecura_owner} # the name only
+  API_ALLOWED_HOSTS: '["${DOMAIN:?set DOMAIN in .env}","localhost","127.0.0.1"]'
+  SESSION_COOKIE_SECURE: "true"
+  INVITE_VALID_HOURS: ${INVITE_VALID_HOURS:-48}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ASSESSMENT_ROLE_NAME: ${AWS_ASSESSMENT_ROLE_NAME:-SubtleTechSecurityAssessment}
+  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cloudsecura}
+      POSTGRES_USER: ${POSTGRES_OWNER_USER:-cloudsecura_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?run ./init-env.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [data]
+    read_only: true
+    tmpfs: [/tmp, /var/run/postgresql]
+    security_opt: [no-new-privileges:true]
+    shm_size: 128mb
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-off on every start: apply migrations as the owner, then (re)create the
+  # restricted application login with exactly its privileges.
+  migrate:
+    <<: [*app-image, *hardening]
+    restart: "no"
+    command: ["sh", "-c", "alembic upgrade head && python -m app.storage.dbroles"]
+    environment:
+      <<: *app-env
+      POSTGRES_OWNER_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?run ./init-env.sh}
+    networks: [data]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck: { disable: true }
+
+  api:
+    <<: [*app-image, *hardening]
+    # Trust X-Forwarded-For only from caddy's fixed address, so the login rate
+    # limit and audit log see the real client address.
+    command:
+      - uvicorn
+      - app.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --no-server-header
+      - --proxy-headers
+      - --forwarded-allow-ips=${EDGE_NET:-172.31.250}.2
+    environment:
+      <<: *app-env
+      # Platform cloud identity (development-style keys; on AWS/Azure hosts prefer
+      # the host's managed identity, see docs/deployment.md).
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+    networks:
+      edge: { ipv4_address: "${EDGE_NET:-172.31.250}.3" } # caddy is .2
+      data: {}
+    mem_limit: 1g
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    <<: [*app-image, *hardening]
+    command: ["python", "-m", "app.worker"]
+    environment:
+      <<: *app-env
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+    networks: [data, egress]
+    mem_limit: 1g
+    stop_grace_period: 2m
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-alive') > 120)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    ports: # change only for testing (HTTP_PORT/HTTPS_PORT in .env)
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      public: {}
+      edge: { ipv4_address: "${EDGE_NET:-172.31.250}.2" }
+    <<: *hardening
+    cap_add: [NET_BIND_SERVICE]
+    depends_on:
+      api: { condition: service_healthy }
+
+  # Nightly compressed database dump, kept 14 days (copy them off the server too:
+  # docs/deployment.md, "Backups").
+  backup:
+    image: postgres:17-alpine
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          umask 077
+          f=/backups/cloudsecura-$$(date -u +%Y%m%dT%H%M%SZ).dump
+          pg_dump -Fc -h db -U "$$PGUSER" -d "$$PGDATABASE" -f "$$f.partial" && mv "$$f.partial" "$$f" && echo "backup written: $$f"
+          find /backups -name 'cloudsecura-*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+    environment:
+      PGUSER: ${POSTGRES_OWNER_USER:-cloudsecura_owner}
+      PGPASSWORD: ${POSTGRES_OWNER_PASSWORD:?run ./init-env.sh}
+      PGDATABASE: ${POSTGRES_DB:-cloudsecura}
+    volumes:
+      - backups:/backups
+    networks: [data]
+    <<: *hardening
+    depends_on:
+      db: { condition: service_healthy }
+
+networks:
+  public: {} # internet-facing (caddy only)
+  edge: # caddy <-> api; no internet access
+    internal: true
+    ipam:
+      # EDGE_NET in .env if this range clashes with the server's own network.
+      config: [{ subnet: "${EDGE_NET:-172.31.250}.0/29" }]
+  data: # api, worker, db, migrate, backup; no internet access
+    internal: true
+  egress: {} # worker -> client cloud APIs
+
+volumes:
+  pgdata:
+  backups:
+  caddy_data:
+  caddy_config:

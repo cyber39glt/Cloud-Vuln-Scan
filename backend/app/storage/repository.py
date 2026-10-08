@@ -6,14 +6,19 @@ does not exist (NotFoundError), so a caller cannot even learn that it exists.
 """
 
 import hashlib
+import hmac
 import json
 import logging
 import uuid
+from functools import lru_cache
 from typing import Any
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.domain.enums import Provider
 from app.domain.findings import AssessmentResult
 from app.providers.aws.session import generate_external_id
@@ -36,6 +41,27 @@ class NotFoundError(LookupError):
 
 class IntegrityViolation(RuntimeError):
     """A stored scan result no longer matches its recorded hash."""
+
+
+@lru_cache(maxsize=4)
+def _mac_key(secret: str) -> bytes:
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=None, info=b"stored-result-integrity-v1"
+    ).derive(secret.encode("utf-8"))
+
+
+def integrity_mac(*parts: object) -> str:
+    """HMAC-SHA256 with a key derived from APP_SECRET_KEY, over the record's identity
+    and content hash (ADR 0026). Someone who can write to the database but does not
+    have the application's secret cannot forge it, and a record copied into another
+    row or another client does not verify. Changing APP_SECRET_KEY invalidates it
+    (as it does MFA enrolments)."""
+    message = "|".join(str(p) for p in parts).encode("utf-8")
+    return hmac.new(_mac_key(get_settings().secret_key), message, hashlib.sha256).hexdigest()
+
+
+def verify_mac(expected: str, *parts: object) -> bool:
+    return hmac.compare_digest(expected or "", integrity_mac(*parts))
 
 
 def result_hash(result_json: dict[str, Any]) -> str:
@@ -277,7 +303,10 @@ def save_scan_result(
         )
 
     result_json = result.model_dump(mode="json")
+    scan_id = uuid.uuid4()
+    digest = result_hash(result_json)
     scan = ScanRun(
+        id=scan_id,
         client_id=client_id,
         assessment_id=assessment_id,
         status=ScanStatus.COMPLETED,
@@ -288,7 +317,8 @@ def save_scan_result(
         started_at=result.started_at,
         completed_at=result.completed_at,
         result=result_json,
-        result_sha256=result_hash(result_json),
+        result_sha256=digest,
+        result_mac=integrity_mac("scan_run", scan_id, client_id, digest),
     )
     session.add(scan)
     session.flush()
@@ -336,7 +366,9 @@ def load_scan_result(
     )
     if scan is None:
         raise NotFoundError("scan not found")
-    if result_hash(scan.result) != scan.result_sha256:
+    if result_hash(scan.result) != scan.result_sha256 or not verify_mac(
+        scan.result_mac, "scan_run", scan.id, scan.client_id, scan.result_sha256
+    ):
         logger.error("stored scan failed integrity check", extra={"scan_run_id": str(scan.id)})
         raise IntegrityViolation("stored scan result does not match its recorded hash")
     return AssessmentResult.model_validate(scan.result)

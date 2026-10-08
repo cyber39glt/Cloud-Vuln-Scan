@@ -31,5 +31,6 @@ supersedes the old one, so the history of *why* is preserved.
 | [0023](0023-finding-review-and-finalization.md) | Finding review layer and assessment finalization | Accepted |
 | [0024](0024-onboarding-and-public-showcase.md) | First-run setup, invitation links, public showcase page, redesign | Accepted |
 | [0025](0025-least-privilege-and-security-review.md) | Generated least-privilege permissions; M13 security review fixes | Accepted |
+| [0026](0026-production-deployment.md) | Production deployment: one server, Caddy, restricted database login, keyed integrity | Accepted (host to be chosen) |
 
 To add one, copy the structure of an existing ADR and use the next number.

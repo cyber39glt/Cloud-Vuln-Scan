@@ -192,6 +192,18 @@ def finalization_history(
     )
 
 
+def finalization_mac(
+    finalization_id: uuid.UUID,
+    client_id: uuid.UUID,
+    assessment_id: uuid.UUID,
+    scan_run_id: uuid.UUID,
+    report_sha256: str,
+) -> str:
+    return repo.integrity_mac(
+        "finalization", finalization_id, client_id, assessment_id, scan_run_id, report_sha256
+    )
+
+
 def store_finalization(
     session: Session,
     assessment: Assessment,
@@ -202,7 +214,9 @@ def store_finalization(
     actor: str,
     finalized_at: datetime,
 ) -> AssessmentFinalization:
+    finalization_id = uuid.uuid4()
     finalization = AssessmentFinalization(
+        id=finalization_id,
         client_id=assessment.client_id,
         assessment_id=assessment.id,
         scan_run_id=scan_run_id,
@@ -211,6 +225,9 @@ def store_finalization(
         finalized_by=actor,
         report=report_json,
         report_sha256=report_sha256,
+        report_mac=finalization_mac(
+            finalization_id, assessment.client_id, assessment.id, scan_run_id, report_sha256
+        ),
     )
     session.add(finalization)
     assessment.status = AssessmentStatus.FINALIZED

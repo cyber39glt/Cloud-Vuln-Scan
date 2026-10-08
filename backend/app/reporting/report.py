@@ -13,6 +13,7 @@ The JSON export IS this model, serialized. Its structure is versioned
 (REPORT_SCHEMA_VERSION) and published as a JSON Schema for integrations.
 """
 
+import hmac
 import uuid
 from collections import Counter
 from collections.abc import Mapping
@@ -231,7 +232,12 @@ def report_for_scan(
         # data was tampered with: refuse rather than quietly serve a draft.
         raise repo.IntegrityViolation("finalized assessment has no finalized report")
     if final is not None and final.scan_run_id == scan.id:
-        if repo.result_hash(final.report) != final.report_sha256:
+        mac = reviews.finalization_mac(
+            final.id, final.client_id, final.assessment_id, final.scan_run_id, final.report_sha256
+        )
+        if repo.result_hash(final.report) != final.report_sha256 or not hmac.compare_digest(
+            final.report_mac or "", mac
+        ):
             raise repo.IntegrityViolation("finalized report does not match its recorded hash")
         return AssessmentReport.model_validate(final.report)
 
