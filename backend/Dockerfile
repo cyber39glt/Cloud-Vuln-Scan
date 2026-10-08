@@ -62,6 +62,9 @@ COPY migrations ./migrations
 COPY --from=web /web/dist ./web
 # The non-root user has no home directory: font caches (PDF reports) go to /tmp.
 ENV XDG_CACHE_HOME=/tmp/app-cache
+# Production mode unless explicitly overridden: the production safety checks (real
+# secrets, secure cookies, no API docs) can then never be skipped by omission.
+ENV APP_ENV=production
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

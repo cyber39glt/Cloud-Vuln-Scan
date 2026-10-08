@@ -71,6 +71,11 @@ def complete_setup(
     ip: str | None,
 ) -> User:
     """Create the first administrator. Raises OnboardingError (audit-logged)."""
+    if not settings.app_secret_key.get_secret_value():
+        # Without its own key the code would derive from the public development key.
+        raise OnboardingError(
+            "Set APP_SECRET_KEY before first-run setup (scripts/dev.ps1 does this for you)."
+        )
     db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": _SETUP_LOCK_ID})
     if not setup_needed(db):
         audit.record(db, "setup.completed", audit.ANONYMOUS, outcome="denied", ip_address=ip)
@@ -215,6 +220,12 @@ def accept_invite(db: Session, token: str, password: str, ip: str | None) -> Use
         raise OnboardingError(INVALID_INVITE)
     if find_user(db, invite.email) is not None:
         raise OnboardingError("An account with this e-mail address already exists. Log in instead.")
+    if invite.created_by_user_id is not None:
+        creator = db.get(User, invite.created_by_user_id)
+        if creator is None or not creator.is_active or creator.role != Role.ADMIN:
+            # Defence in depth: removing an admin also revokes their invitations.
+            audit.record(db, "invite.accepted", audit.ANONYMOUS, outcome="failure", ip_address=ip)
+            raise OnboardingError(INVALID_INVITE)
     _check_password(password, invite.email)
     now = _now()
     user = User(

@@ -18,7 +18,12 @@ from azure.core.pipeline.policies import (
 from azure.core.rest import HttpRequest
 from azure.mgmt.core.exceptions import ARMErrorFormat
 
-from app.providers.azure.guard import ARM_HOST, ReadOnlyPolicy, assessment_permissions
+from app.providers.azure.guard import (
+    ARM_HOST,
+    HTTP_LIMITS,
+    ReadOnlyPolicy,
+    assessment_permissions,
+)
 from app.providers.azure.session import ARM_SCOPE
 
 SUBSCRIPTIONS_API_VERSION = "2022-12-01"
@@ -32,13 +37,17 @@ class ArmReader:
                 ReadOnlyPolicy(assessment_permissions()),
                 HeadersPolicy(),
                 UserAgentPolicy(sdk_moniker="cloudsecura"),
-                RetryPolicy(retry_total=3),
+                RetryPolicy(retry_total=HTTP_LIMITS["retry_total"], timeout=HTTP_LIMITS["timeout"]),
                 BearerTokenCredentialPolicy(credential, ARM_SCOPE),
             ],
         )
 
     def _send(self, request: HttpRequest) -> dict[str, Any]:
-        response = self._client.send_request(request)
+        response = self._client.send_request(
+            request,
+            connection_timeout=HTTP_LIMITS["connection_timeout"],
+            read_timeout=HTTP_LIMITS["read_timeout"],
+        )
         if response.status_code >= 400:
             raise HttpResponseError(response=response, error_format=ARMErrorFormat)
         return response.json()

@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # the token is not left in .git/config
 
       - name: Create .env from the example
         # curl talks to the API over plain http://127.0.0.1, so the smoke test needs
@@ -72,6 +74,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # the token is not left in .git/config
       - name: Build the prod target (includes the dashboard)
         run: >
           docker build --target prod --build-context frontend=./frontend
@@ -87,6 +91,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # the token is not left in .git/config
       - name: Type-check, test and build in the same Node image as development
         run: >
           docker run --rm -v "$GITHUB_WORKSPACE/frontend:/web" -w /web node:24-alpine
@@ -99,9 +105,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false # the token is not left in .git/config
           fetch-depth: 0 # full history: a secret deleted later is still leaked
       - name: Gitleaks
         run: >
           docker run --rm -v "$GITHUB_WORKSPACE:/repo"
           zricethezav/gitleaks:v8.30.1
           git /repo --redact --no-banner --verbose
+
+  dependency-audit:
+    name: Dependency audit (known vulnerabilities)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Python dependencies (exact versions from uv.lock)
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/backend:/src:ro" python:3.12-slim
+          sh -c "pip install -q uv==0.12.22 pip-audit==2.10.1
+          && uv export --project /src --frozen --no-dev --no-hashes -o /tmp/requirements.txt
+          && pip-audit -r /tmp/requirements.txt --no-deps --disable-pip"
+      - name: Dashboard dependencies (package-lock.json)
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/web:ro" -w /web node:24-alpine
+          npm audit --audit-level=high

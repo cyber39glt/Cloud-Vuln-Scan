@@ -10,16 +10,25 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.auth import audit, mfa, passwords
 from app.auth import sessions as auth_sessions
 from app.auth.audit import Actor
 from app.core.config import Settings
-from app.storage.models import ClientAssignment, RecoveryCode, Role, User, UserSession
+from app.storage.models import (
+    ClientAssignment,
+    RecoveryCode,
+    Role,
+    User,
+    UserInvite,
+    UserSession,
+)
 
 MAX_MFA_FAILURES_PER_SESSION = 5
+# Serializes changes that could remove the last administrator (an arbitrary constant).
+_ADMIN_CHANGE_LOCK_ID = 0x5E7_0002
 GENERIC_LOGIN_ERROR = "Invalid e-mail or password, or the account is temporarily locked."
 
 
@@ -63,7 +72,9 @@ def authenticate(
     valid = passwords.verify_password(user.password_hash if usable else None, password)
 
     if usable and valid and not locked:
-        user.failed_login_count = 0
+        # The failure counter is NOT reset here: only a complete login (password AND
+        # second factor, see finish_login) resets it. Otherwise a stolen password
+        # would buy unlimited authenticator-code guesses, five per fresh login.
         user.locked_until = None
         if user.password_hash and passwords.needs_rehash(user.password_hash):
             user.password_hash = passwords.hash_password(password)
@@ -124,11 +135,30 @@ def start_enrollment(db: Session, user: User, settings: Settings, ip: str | None
     )
 
 
+def _lock_user_row(db: Session, user: User) -> None:
+    """Serialize second-factor checks per user (SELECT ... FOR UPDATE) and reload the
+    user, so two simultaneous requests cannot both use the same one-time code."""
+    db.refresh(user, with_for_update=True)
+
+
+def _is_locked(user: User) -> bool:
+    return user.locked_until is not None and user.locked_until > _now()
+
+
 def _mfa_failure(
-    db: Session, session: UserSession, user: User, ip: str | None, action: str, method: str
+    db: Session,
+    session: UserSession,
+    user: User,
+    settings: Settings,
+    ip: str | None,
+    action: str,
+    method: str,
 ) -> None:
-    """Count a wrong code; after too many, end the session (password needed again)."""
+    """Count a wrong code against the session AND the account. Too many on the
+    session ends it; too many on the account (wrong passwords and wrong codes
+    together, since the last complete login) locks the account."""
     session.mfa_failures += 1
+    user.failed_login_count += 1
     audit.record(
         db,
         action,
@@ -138,7 +168,19 @@ def _mfa_failure(
         method=method,
         failures=session.mfa_failures,
     )
-    if session.mfa_failures >= MAX_MFA_FAILURES_PER_SESSION:
+    if user.failed_login_count >= settings.max_failed_logins:
+        user.locked_until = _now() + timedelta(minutes=settings.lockout_minutes)
+        user.failed_login_count = 0
+        audit.record(
+            db,
+            "auth.lockout",
+            actor_for(user),
+            outcome="failure",
+            ip_address=ip,
+            minutes=settings.lockout_minutes,
+        )
+        auth_sessions.revoke(db, session)
+    elif session.mfa_failures >= MAX_MFA_FAILURES_PER_SESSION:
         auth_sessions.revoke(db, session)
 
 
@@ -151,12 +193,16 @@ def complete_enrollment(
     ip: str | None,
 ) -> list[str] | None:
     """Confirm the authenticator works; returns the new recovery codes (shown once)."""
+    _lock_user_row(db, user)
     if user.mfa_enabled or not user.mfa_secret_encrypted:
         raise AccountError("Start MFA setup first.")
+    if _is_locked(user):
+        auth_sessions.revoke(db, session)
+        return None
     secret = mfa.decrypt_secret(user.mfa_secret_encrypted, settings.secret_key)
     step = mfa.verify_code(secret, code, user.mfa_last_used_step)
     if step is None:
-        _mfa_failure(db, session, user, ip, "mfa.enrollment", "totp")
+        _mfa_failure(db, session, user, settings, ip, "mfa.enrollment", "totp")
         return None
     user.mfa_enabled = True
     user.mfa_last_used_step = step
@@ -184,7 +230,14 @@ def verify_second_factor(
 ) -> bool:
     """Check a TOTP code or a recovery code for a pending session. After too many
     failures the session is ended and the password must be entered again."""
+    _lock_user_row(db, user)
     if not user.mfa_enabled or not user.mfa_secret_encrypted:
+        return False
+    if _is_locked(user):
+        audit.record(
+            db, "mfa.verify", actor_for(user), outcome="failure", ip_address=ip, reason="locked"
+        )
+        auth_sessions.revoke(db, session)
         return False
     if code:
         secret = mfa.decrypt_secret(user.mfa_secret_encrypted, settings.secret_key)
@@ -214,12 +267,14 @@ def verify_second_factor(
             )
             return True
 
-    _mfa_failure(db, session, user, ip, "mfa.verify", "totp" if code else "recovery_code")
+    _mfa_failure(db, session, user, settings, ip, "mfa.verify", "totp" if code else "recovery_code")
     return False
 
 
 def finish_login(db: Session, user: User) -> None:
+    """A complete login (password and second factor): reset the failure counter."""
     user.last_login_at = _now()
+    user.failed_login_count = 0
 
 
 def regenerate_recovery_codes(db: Session, user: User, ip: str | None) -> list[str]:
@@ -307,8 +362,33 @@ def update_user(
     )
     if removes_admin and actor.user_id == user.id:
         raise AccountError("You cannot remove your own administrator access.")
-    if removes_admin and _active_admins(db) <= 1:
-        raise AccountError("At least one active administrator must remain.")
+    if removes_admin:
+        # Serialize admin removals: two admins demoting each other at the same moment
+        # must not both see "two admins left" and leave none.
+        db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": _ADMIN_CHANGE_LOCK_ID})
+        if _active_admins(db) <= 1:
+            raise AccountError("At least one active administrator must remain.")
+        # Invitations they created end with their administrator access.
+        revoked = db.execute(
+            update(UserInvite)
+            .where(
+                UserInvite.created_by_user_id == user.id,
+                UserInvite.accepted_at.is_(None),
+                UserInvite.revoked_at.is_(None),
+            )
+            .values(revoked_at=_now())
+        ).rowcount
+        if revoked:
+            audit.record(
+                db,
+                "invite.revoked",
+                actor,
+                target_type="user",
+                target_id=user.id,
+                ip_address=ip,
+                reason="creator lost administrator access",
+                count=revoked,
+            )
     changes: dict[str, object] = {}
     if role is not None and role != user.role:
         changes["role"] = [user.role.value, role.value]

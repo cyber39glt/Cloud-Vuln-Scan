@@ -64,7 +64,7 @@ def finalize(
     actor: str,
     scan_id: uuid.UUID | None = None,
 ) -> AssessmentFinalization:
-    assessment = repo.get_assessment(session, client_id, assessment_id)
+    assessment = repo.get_assessment(session, client_id, assessment_id, for_update=True)
     if assessment.status == AssessmentStatus.FINALIZED:
         raise FinalizationNotAllowed("This assessment is already finalized.")
     if session.scalar(
@@ -128,7 +128,7 @@ def finalize(
 
 
 def reopen(session: Session, client_id: uuid.UUID, assessment_id: uuid.UUID) -> None:
-    assessment = repo.get_assessment(session, client_id, assessment_id)
+    assessment = repo.get_assessment(session, client_id, assessment_id, for_update=True)
     if assessment.status != AssessmentStatus.FINALIZED:
         raise FinalizationNotAllowed("Only a finalized assessment can be reopened.")
     assessment.status = AssessmentStatus.IN_REVIEW

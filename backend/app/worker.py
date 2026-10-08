@@ -95,6 +95,8 @@ def _describe_failure(provider: Provider | None, error: Exception) -> tuple[str,
     """(code, plain-language message) for the job record."""
     if isinstance(error, WrongAccountError):
         return "WrongAccount", f"Stopped before collecting anything: {error}."
+    if isinstance(error, repo.AssessmentLocked):
+        return "AssessmentFinalized", str(error)
     if isinstance(error, ReadOnlyViolation):
         return (
             "ReadOnlyViolation",

@@ -11,8 +11,10 @@ interface Onboarding {
   role_name: string | null;
   external_id: string | null;
   template: string | null;
+  permissions: string[];
   admin_consent_url: string | null;
   role_commands: string[];
+  fallback_role_commands: string[];
   guide: string;
 }
 
@@ -135,6 +137,11 @@ function OnboardingSteps({ steps }: { steps: Onboarding }) {
             <code>{steps.external_id}</code>
           </dd>
         </dl>
+        <details>
+          <summary>The {steps.permissions.length} read permissions the role grants (default)</summary>
+          <pre>{steps.permissions.join("\n")}</pre>
+          <p className="muted">Data and secret reads are explicitly denied.</p>
+        </details>
         <p className="muted">Full guide: {steps.guide}</p>
       </div>
     );
@@ -151,10 +158,17 @@ function OnboardingSteps({ steps }: { steps: Onboarding }) {
           )}
         </li>
         <li>
-          …then assigns read-only roles on the subscription (Azure Cloud Shell):
+          …then creates a custom read-only role with exactly the permissions the checks use, and assigns it to the
+          app (Azure Cloud Shell):
           {steps.role_commands.map((c) => (
             <pre key={c}>{c}</pre>
           ))}
+          <details>
+            <summary>Alternative: Azure’s broader built-in read-only roles</summary>
+            {steps.fallback_role_commands.map((c) => (
+              <pre key={c}>{c}</pre>
+            ))}
+          </details>
         </li>
       </ol>
       <p className="muted">Full guide: {steps.guide}</p>

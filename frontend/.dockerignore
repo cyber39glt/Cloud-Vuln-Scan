@@ -1,2 +1,4 @@
 node_modules
 dist
+# Never build local environment files into the dashboard.
+.env*

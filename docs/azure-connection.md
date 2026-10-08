@@ -13,7 +13,8 @@ SubtleTech's Entra application (ONE app, "multi-tenant")
         │
         │ 1. The client's admin opens a consent link once → the app appears in THEIR
         │    directory (as a "service principal"). This alone grants no access.
-        │ 2. The client gives that app "Reader" + "Security Reader" on the subscription.
+        │ 2. The client gives that app a custom read-only role with exactly the
+        │    permissions the checks use (or, alternatively, "Reader" + "Security Reader").
         ▼
 Platform asks Entra ID for a token for the CLIENT's tenant (valid ~1 hour)
         │
@@ -28,13 +29,16 @@ GET requests to Azure Resource Manager (management.azure.com) → configuration 
 | **Subscription** | A billing and access boundary containing Azure resources. |
 | **App registration / multi-tenant app** | An identity for software. Multi-tenant means other organizations can let it into their tenant. |
 | **Service principal** | The app's representation inside a specific tenant, created by admin consent. Roles are assigned to it. |
-| **Reader / Security Reader** | Built-in roles that can read configuration and security settings, and cannot change anything. |
+| **Custom role** | A role the client defines with an exact list of permissions. Ours lists only `.../read` permissions. |
+| **Reader / Security Reader** | Built-in roles that can read (almost) all configuration and security settings, and cannot change anything. Broader than needed; the alternative to the custom role. |
 | **Azure Resource Manager (ARM)** | The API behind the Azure portal: `https://management.azure.com`. |
 
 ### The two read-only layers
 
-1. **In the client's subscription:** only `Reader` and `Security Reader`. These cannot
-   create, change or delete anything, and cannot call "actions" such as `listKeys`.
+1. **In the client's subscription:** by default a **custom role** with only the seven
+   read permissions the checks use (below). Alternatively the built-in `Reader` and
+   `Security Reader` roles. None of these can create, change or delete anything, or call
+   "actions" such as `listKeys`.
 2. **In the platform** (`backend/app/providers/azure/guard.py`): every Azure SDK client
    is built with a pipeline policy that runs before each request (before a token is even
    attached) and refuses anything that is not:
@@ -42,6 +46,23 @@ GET requests to Azure Resource Manager (management.azure.com) → configuration 
    - to **`management.azure.com`** (never Key Vault, Storage or other data hosts where
      secrets and business data live),
    - for a resource type on the **allowlist** derived from the enabled rules.
+
+### The exact permissions (custom role, recommended)
+
+Generated from the code ([ADR 0025](decisions/0025-least-privilege-and-security-review.md));
+template: `infra/azure/assessment-role.json`. No data actions.
+
+```
+Microsoft.Insights/diagnosticSettings/read     Microsoft.Sql/servers/firewallRules/read
+Microsoft.Network/networkSecurityGroups/read   Microsoft.Sql/servers/read
+Microsoft.Resources/subscriptions/read         Microsoft.Storage/storageAccounts/read
+Microsoft.Security/pricings/read
+```
+
+The platform also adds its guard **twice** to every Azure SDK client: first, and again
+just before a request is sent. The second one catches requests the SDK creates on its
+own, such as automatic resource-provider registration (a write) or following a
+redirect to another host.
 
 ### What the platform stores
 
@@ -56,16 +77,21 @@ The consultant runs `azure connect` (below), which prints the exact links and co
    `https://login.microsoftonline.com/<client-tenant>/adminconsent?client_id=<app-id>`
    while signed in as a Global Administrator, Application Administrator or Cloud
    Application Administrator → **Accept**.
-2. **Roles** (Azure portal → the subscription → **Access control (IAM)** → **Add role
-   assignment** → `Reader` → Members: select the SubtleTech app; repeat for
-   `Security Reader`). Or in **Azure Cloud Shell**:
+2. **Role** (needs Owner or User Access Administrator on the subscription). In **Azure
+   Cloud Shell**, run the two commands printed by `azure connect` (also shown on the
+   client page of the dashboard). They create the custom role
+   "SubtleTech Security Assessment (read-only)" for this subscription and assign it to
+   the app:
    ```bash
-   az role assignment create --assignee <app-id> --role "Reader" --scope /subscriptions/<sub-id>
-   az role assignment create --assignee <app-id> --role "Security Reader" --scope /subscriptions/<sub-id>
+   az role definition create --role-definition '<the JSON printed for this client>'
+   az role assignment create --assignee <app-id> --role 'SubtleTech Security Assessment (read-only)' --scope /subscriptions/<sub-id>
    ```
+   **Alternative** (broader access, no custom role): assign the built-in `Reader` and
+   `Security Reader` roles instead (portal: subscription → **Access control (IAM)** →
+   **Add role assignment**, or the fallback commands that are also printed).
 3. Send the consultant the **tenant ID** and **subscription ID**.
-4. To revoke access at any time: remove the two role assignments, and optionally delete the
-   app from **Entra ID → Enterprise applications**.
+4. To revoke access at any time: remove the role assignment(s) (and the custom role), and
+   optionally delete the app from **Entra ID → Enterprise applications**.
 
 ## Testing against your sandbox
 

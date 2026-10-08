@@ -279,8 +279,10 @@ def test_onboarding_template_matches_platform_settings():
     assert "sts:ExternalId" in template
     assert "MaxSessionDuration: 3600" in template
     assert "Effect: Deny" in template
-    # The only Allow in the template is the trust statement for AssumeRole.
-    assert template.count("Effect: Allow") == 1
+    # Two Allows: the trust statement for AssumeRole, and the generated read-only
+    # policy (its contents are checked in test_policies.py).
+    assert template.count("Effect: Allow") == 2
+    assert "Default: LeastPrivilege" in template
 
 
 def test_boto3_is_only_used_by_the_providers_package():

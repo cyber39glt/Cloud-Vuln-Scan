@@ -1,6 +1,7 @@
 """Finding review, finalization and reopening (M12): behaviour, locking, history,
 outputs, isolation and immutability."""
 
+import csv
 import io
 import uuid
 
@@ -260,12 +261,12 @@ def test_consultants_cannot_reopen(http, db, setup):
 def test_csv_and_overview_reflect_reviews(api, setup):
     _review(api, setup, "NET-002", "false_positive", justification="Bastion host behind VPN only")
     _review(api, setup, "NET-001", "confirmed", "medium", "Only reachable from office IP range")
-    csv = api.get(
+    text = api.get(
         f"/api/v1/clients/{setup['client'].id}/scans/{setup['scan'].id}/report.csv"
     ).content.decode("utf-8-sig")
-    header = csv.splitlines()[0].split(",")
+    header = next(csv.reader(io.StringIO(text)))
     assert {"review_status", "original_severity", "review_justification"} <= set(header)
-    assert "false_positive" in csv and "Bastion host behind VPN only" in csv
+    assert "false_positive" in text and "Bastion host behind VPN only" in text
 
     [item] = api.get("/api/v1/overview").json()["items"]
     assert sum(item["latest_scan"]["by_severity"].values()) == 9  # false positive left out

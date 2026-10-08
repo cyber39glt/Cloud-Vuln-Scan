@@ -15,7 +15,7 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "up", "down", "restart", "status", "logs", "test", "lint", "format",
                  "secrets", "check", "build", "reset", "demo", "aws", "migrate",
-                 "clients", "assessments", "azure", "users", "webtest")]
+                 "clients", "assessments", "azure", "users", "webtest", "policies")]
     [string]$Command = "help",
 
     # Anything after the command is passed through (e.g. extra pytest options).
@@ -82,6 +82,7 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
   logs      Follow the API and worker logs (Ctrl+C to stop); 'logs worker' for one
   test      Run the backend test suite inside the container (extra args go to pytest)
   webtest   Type-check and test the dashboard (frontend)
+  policies  Regenerate the least-privilege cloud permissions in infra/ (after changing checks)
   lint      Check code style and common mistakes with Ruff
   format    Auto-format and auto-fix code with Ruff
   secrets   Scan the git history for committed secrets with Gitleaks
@@ -196,6 +197,11 @@ try {
             Invoke-Compose (@("run", "--rm", "api", "python", "-m", "app.demo") + $demoArgs)
         }
         "webtest" { Invoke-WebTests }
+        "policies" {
+            Write-Step "Regenerating least-privilege cloud permissions in infra/"
+            Invoke-Compose @("run", "--rm", "--no-deps", "--volume", "${RepoRoot}/infra:/infra-out",
+                "--env", "POLICIES_INFRA_DIR=/infra-out", "api", "python", "-m", "app.policies")
+        }
         "check" {
             Invoke-Lint
             Invoke-Tests

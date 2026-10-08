@@ -76,7 +76,7 @@ may access: until then they see no client data.
 | Problem | Fix |
 |---|---|
 | Lost phone | Use a recovery code, or an admin clicks **Reset MFA** on the Users page. The user sets up MFA again at next login. |
-| Forgotten password, or "locked" after 5 wrong tries | Wait 15 minutes (lock), or an admin clicks **Reset password** → new temporary password. |
+| Forgotten password, or "locked" after 5 wrong tries (wrong passwords and wrong authenticator codes count together) | Wait 15 minutes (lock), or an admin clicks **Reset password** → new temporary password. |
 | Nobody can log in (e.g. the only admin lost their phone) | On the server: `.\scripts\dev.ps1 users reset-mfa --email ...` and/or `users reset-password --email ...`. |
 | Someone leaves | An admin clicks **Deactivate**: their sessions end at once. |
 

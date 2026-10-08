@@ -432,3 +432,4 @@ tr.inactive td { opacity: 0.55; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before { animation: none !important; transition: none !important; }
 }
+.onboarding pre { white-space: pre-wrap; word-break: break-all; }

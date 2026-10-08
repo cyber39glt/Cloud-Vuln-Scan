@@ -38,6 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from app import policies
 from app.auth import audit, onboarding
 from app.auth import service as accounts
 from app.console import UNVERIFIED_NOTE, format_summary
@@ -216,18 +217,21 @@ def _azure_connect(args: argparse.Namespace) -> int:
         except ValueError as exc:
             raise CliError(str(exc).capitalize() + ".") from exc
         app_id = settings.azure_client_id or "<AZURE_CLIENT_ID not configured>"
-        scope = f"/subscriptions/{connection.account_id}"
         print(f"Client      : {client.name}")
         print(f"Tenant      : {connection.tenant_id}")
         print(f"Subscription: {connection.account_id}")
         print("\nClient onboarding (done by the client's administrator):")
         print("1. Grant consent (creates the app in their tenant; gives no access by itself):")
         print(f"   {admin_consent_url(connection.tenant_id, app_id)}")
-        print("2. Give the app read-only roles on the subscription (Azure Cloud Shell):")
-        for role in ("Reader", "Security Reader"):
-            print(
-                f'   az role assignment create --assignee {app_id} --role "{role}" --scope {scope}'
-            )
+        print("2. Create a custom read-only role with exactly the permissions the checks use,")
+        print("   and give it to the app (Azure Cloud Shell):")
+        for command in policies.azure_role_commands(
+            settings.consultancy_name, connection.account_id, app_id
+        ):
+            print(f"   {command}")
+        print("   Or, instead, the broader built-in read-only roles:")
+        for command in policies.azure_builtin_role_commands(connection.account_id, app_id):
+            print(f"   {command}")
         print(
             f'\nThen run: azure validate --client "{client.name}" '
             f"--subscription-id {connection.account_id}"
@@ -527,6 +531,8 @@ def _users_setup_code(_: argparse.Namespace) -> int:
     """Show the code that unlocks the dashboard's first-run setup page (ADR 0024)."""
 
     def work(db: Session) -> int:
+        if not get_settings().app_secret_key.get_secret_value():
+            raise CliError("Set APP_SECRET_KEY in .env first: the setup code is derived from it.")
         if not onboarding.setup_needed(db):
             print("Setup is already complete: users exist. Log in, or ask an administrator.")
             return 0

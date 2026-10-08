@@ -28,7 +28,7 @@ from app.domain.findings import AssessmentResult, CheckResult, Finding
 from app.domain.reviews import Review
 from app.storage import repository as repo
 from app.storage import reviews
-from app.storage.models import Assessment, Client, ScanRun
+from app.storage.models import Assessment, AssessmentStatus, Client, ScanRun
 
 # Increase the minor version for additions, the major version for breaking changes.
 # 1.1: review details on findings, accepted_risks / false_positives lists, report status.
@@ -226,6 +226,10 @@ def report_for_scan(
     ).one()
 
     final = reviews.current_finalization(session, client_id, assessment.id)
+    if final is None and assessment.status == AssessmentStatus.FINALIZED:
+        # A finalized assessment always has a snapshot. Its absence means the stored
+        # data was tampered with: refuse rather than quietly serve a draft.
+        raise repo.IntegrityViolation("finalized assessment has no finalized report")
     if final is not None and final.scan_run_id == scan.id:
         if repo.result_hash(final.report) != final.report_sha256:
             raise repo.IntegrityViolation("finalized report does not match its recorded hash")

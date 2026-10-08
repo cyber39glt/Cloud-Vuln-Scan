@@ -198,6 +198,7 @@ def unassign_client(
     user_id: uuid.UUID, client_id: uuid.UUID, admin: AdminUser, db: DbSession, ip: Ip
 ) -> UserOut:
     user = _user(db, user_id)
+    repo.get_client(db, client_id)  # unknown client: 404, not a misleading audit entry
     service.unassign_client(db, user, client_id, admin.actor, ip)
     return _out(db, user)
 

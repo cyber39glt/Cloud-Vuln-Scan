@@ -120,6 +120,45 @@ def test_guard_blocks_before_anything_is_sent(attempt, blocked):
         assert len(rsps.calls) == 0  # no HTTP request was sent
 
 
+def test_sdk_auto_registration_post_is_blocked():
+    """The SDK answers 'resource provider not registered' with POST .../register.
+    That request is created behind the first guard; the second guard must stop it."""
+    network = guarded_client(NetworkManagementClient, FakeCredential(), SUB)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.get(
+            arm_url(f"/subscriptions/{SUB}/providers/Microsoft.Network/networkSecurityGroups"),
+            status=409,
+            json={
+                "error": {
+                    "code": "MissingSubscriptionRegistration",
+                    "message": "The subscription is not registered to use namespace "
+                    "'Microsoft.Network'.",
+                }
+            },
+        )
+        register = rsps.post(re.compile(r".*/providers/Microsoft\.Network/register.*"), json={})
+        with pytest.raises(ReadOnlyViolation, match="POST is not allowed"):
+            list(network.network_security_groups.list_all())
+        assert register.call_count == 0
+        assert all(call.request.method == "GET" for call in rsps.calls)
+
+
+def test_sdk_redirect_to_another_host_is_blocked():
+    """A 3xx from ARM is followed by the SDK's redirect policy; the target must
+    pass the guard again (here: a data-plane host)."""
+    network = guarded_client(NetworkManagementClient, FakeCredential(), SUB)
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.get(
+            arm_url(f"/subscriptions/{SUB}/providers/Microsoft.Network/networkSecurityGroups"),
+            status=307,
+            headers={"Location": "https://acct.blob.core.windows.net/secret"},
+        )
+        target = rsps.get(re.compile(r"https://acct\.blob\.core\.windows\.net/.*"), json={})
+        with pytest.raises(ReadOnlyViolation, match="host"):
+            list(network.network_security_groups.list_all())
+        assert target.call_count == 0
+
+
 def test_guard_blocks_data_plane_hosts():
     """Key Vault and blob storage hosts hold secrets and data: never contacted."""
     policy = guard.ReadOnlyPolicy(assessment_permissions())

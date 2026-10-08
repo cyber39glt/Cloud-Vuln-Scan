@@ -27,6 +27,15 @@ from app.rules.registry import ALL_RULES
 
 ARM_HOST = "management.azure.com"
 
+# Bounded network behaviour, so one slow or throttling tenant cannot stall the scan
+# worker for hours (SDK defaults: 300 s reads, 10 retries, a week of total retrying).
+HTTP_LIMITS: dict[str, int] = {
+    "connection_timeout": 10,  # seconds to connect
+    "read_timeout": 60,  # seconds waiting for a response
+    "retry_total": 3,  # retries per request
+    "timeout": 300,  # seconds for one request including all its retries
+}
+
 # Calls the connector itself makes, beyond what rules need.
 CONNECTOR_PERMISSIONS: frozenset[str] = frozenset({"Microsoft.Resources/subscriptions/read"})
 
@@ -96,6 +105,22 @@ class ReadOnlyPolicy(SansIOHTTPPolicy):
 
 
 def guarded_client(client_class: type, credential: Any, *args: Any, **kwargs: Any) -> Any:
-    """The ONLY way the app creates Azure SDK clients: always with the guard first."""
+    """The ONLY way the app creates Azure SDK clients, with the guard in two places:
+
+    - first in the pipeline (per call), so a disallowed call is refused before any
+      other policy runs;
+    - again after the retry policy (per retry), right before the token is attached
+      and the request is sent. Policies in between can CREATE requests of their own:
+      the SDK's automatic resource-provider registration answers a "provider not
+      registered" error with a POST .../register (a write), and the redirect policy
+      follows 3xx responses to other URLs. Those requests start below the first
+      guard, so only the second one sees them. (Found in the M13 security review.)
+    """
     policy = ReadOnlyPolicy(assessment_permissions())
-    return client_class(credential, *args, per_call_policies=[policy], **kwargs)
+    return client_class(
+        credential,
+        *args,
+        per_call_policies=[policy],
+        per_retry_policies=[policy],
+        **(HTTP_LIMITS | kwargs),
+    )

@@ -6,7 +6,7 @@ fields explicitly, so a new database column is never exposed by accident.
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -92,9 +92,14 @@ class Onboarding(BaseModel):
     role_name: str | None = None
     external_id: str | None = None
     template: str | None = None
-    # Azure
+    # The exact read permissions granted (AWS, least-privilege default).
+    permissions: list[str] = []
+    # Azure: a custom role with exactly the read permissions the checks use
+    # (recommended), or the broader built-in roles as a fallback.
     admin_consent_url: str | None = None
+    role_definition: dict[str, Any] | None = None
     role_commands: list[str] = []
+    fallback_role_commands: list[str] = []
     guide: str
 
 
