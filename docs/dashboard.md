@@ -20,7 +20,7 @@ First time? Create your account and log in as described in [users.md](users.md).
 | **Clients** | The clients you may access. Admins add new clients here |
 | **Client** | Register the client's AWS account or Azure subscription and show the client's **setup steps** (AWS role name + ExternalId; Azure consent link + role commands); create assessments |
 | **Assessment** | **Run read-only scan** (optionally limited to regions) and watch its progress live: connecting → collecting → evaluating → saving. Past scans and failures with a plain-language reason |
-| **Report** | Findings by severity (click a tile to filter), search, category filter; each finding opens to show what is wrong, why it matters, the recommendation, the **evidence** and the CIS / NIST CSF 2.0 / SOC 2 references. Checks that could not be evaluated are listed separately. Download CSV or JSON |
+| **Report** | Findings by severity (click a tile to filter), search, category filter; each finding opens to show what is wrong, why it matters, the recommendation, the **evidence** and the CIS / NIST CSF 2.0 / SOC 2 references. Checks that could not be evaluated are listed separately. **Download PDF report** (client-ready, see [exports.md](exports.md)), CSV or JSON |
 | **Users** (admins) | Create users (temporary password shown once), change roles, assign consultants to clients, deactivate, reset MFA or password |
 | **Audit log** (admins) | Who did what and when: logins, changes, data views, scans, exports |
 | **Your account** (click your name) | Change your password; create new recovery codes |

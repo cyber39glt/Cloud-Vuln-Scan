@@ -1,0 +1,222 @@
+<!doctype html>
+{# Every {{ value }} is HTML-escaped automatically: client-controlled text (resource
+   names, tags, evidence) can never become markup. Do not use the |safe filter. #}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cloud Security Assessment — {{ r.source.client_name }}</title>
+  <meta name="author" content="{{ r.source.consultancy }}">
+  <meta name="description" content="{{ provider }} {{ account_label }} {{ r.account_id }}, scan {{ r.source.scan_id }}">
+  <meta name="generator" content="Cloud Vuln Scan">
+</head>
+<body>
+
+{# ------------------------------------------------------------ cover #}
+<section class="cover">
+  <div class="cover-brand">{{ r.source.consultancy }}</div>
+  <div class="cover-title">Cloud Security Assessment Report</div>
+  <div class="cover-client">{{ r.source.client_name }}</div>
+  <table class="cover-meta">
+    <tr><th>Assessment</th><td>{{ r.source.assessment_name }}</td></tr>
+    <tr><th>Environment</th><td>{{ provider }} {{ account_label }} <span class="mono">{{ r.account_id }}</span></td></tr>
+    <tr><th>Scope</th><td>{{ regions }}</td></tr>
+    <tr><th>Assessment date</th><td>{{ scan_date }}</td></tr>
+    <tr><th>Report generated</th><td>{{ generated }}</td></tr>
+    <tr><th>Status</th><td>{% if draft %}<strong>DRAFT</strong> — findings not yet reviewed and finalized{% else %}Final{% endif %}</td></tr>
+  </table>
+  <div class="cover-classification">CONFIDENTIAL — contains security-sensitive information about {{ r.source.client_name }}. Share only with authorized recipients.</div>
+</section>
+
+{# ------------------------------------------------------------ executive summary #}
+<section class="page">
+  <h1>1. Executive summary</h1>
+  <p>
+    {{ r.source.consultancy }} assessed the security configuration of the {{ provider }}
+    {{ account_label }} <span class="mono">{{ r.account_id }}</span> belonging to
+    {{ r.source.client_name }}. The assessment ran <strong>{{ r.summary.rules_run }}</strong>
+    automated checks using <strong>read-only</strong> access and identified
+    <strong>{{ total }}</strong> finding{{ "" if total == 1 else "s" }}.
+  </p>
+
+  <div class="rating rating-{{ rating.value if rating else 'none' }}">
+    <span class="rating-label">Highest severity found</span>
+    <span class="rating-value">{{ rating.value|capitalize if rating else "None" }}</span>
+  </div>
+
+  <table class="severity-table">
+    <thead><tr><th>Severity</th><th class="num">Findings</th><th class="bar-col"></th></tr></thead>
+    <tbody>
+    {% for s in severities %}
+      <tr>
+        <td><span class="badge sev-{{ s.value }}">{{ s.value|capitalize }}</span></td>
+        <td class="num">{{ counts[s] }}</td>
+        <td class="bar-col"><div class="bar sev-bg-{{ s.value }} w{{ (counts[s] * 20 // max_bar) * 5 }}"></div></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% if top_risks %}
+  <h2>Priority issues</h2>
+  <p>These critical and high severity issues should be addressed first:</p>
+  <ul class="priority">
+    {% for g in top_risks %}
+    <li><span class="badge sev-{{ g.severity.value }}">{{ g.severity.value|capitalize }}</span>
+      <strong>{{ g.number }}</strong> {{ g.title }}
+      <span class="muted">({{ g.instances|length }} affected)</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No critical or high severity issues were found.</p>
+  {% endif %}
+
+  {% if not_evaluated %}
+  <p class="callout">
+    <strong>{{ not_evaluated|length }} check{{ "" if not_evaluated|length == 1 else "s" }} could not be evaluated</strong>
+    (see section 2). The absence of findings in those areas does not mean they are secure.
+  </p>
+  {% endif %}
+
+  <h2>Findings overview</h2>
+  <table class="list">
+    <thead><tr><th>Ref</th><th>Severity</th><th>Finding</th><th class="num">Affected</th></tr></thead>
+    <tbody>
+    {% for g in groups %}
+      <tr><td class="mono">{{ g.number }}</td>
+          <td><span class="badge sev-{{ g.severity.value }}">{{ g.severity.value|capitalize }}</span></td>
+          <td>{{ g.title }}</td><td class="num">{{ g.instances|length }}</td></tr>
+    {% else %}
+      <tr><td colspan="4">No findings.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# ------------------------------------------------------------ scope and method #}
+<section class="page">
+  <h1>2. Scope and method</h1>
+  <table class="kv">
+    <tr><th>Cloud provider</th><td>{{ provider }}</td></tr>
+    <tr><th>{{ account_label|capitalize }}</th><td class="mono">{{ r.account_id }}</td></tr>
+    <tr><th>Regions</th><td>{{ regions }}</td></tr>
+    <tr><th>Scan started</th><td>{{ r.scan_started_at.strftime("%d %B %Y, %H:%M:%S UTC") }}</td></tr>
+    <tr><th>Scan completed</th><td>{{ r.scan_completed_at.strftime("%d %B %Y, %H:%M:%S UTC") }}</td></tr>
+    <tr><th>Checks run</th><td>{{ r.summary.rules_run }} (rule engine version {{ r.engine_version }})</td></tr>
+  </table>
+
+  <h2>Method</h2>
+  <p>The platform connected with <strong>read-only</strong> permissions granted by
+  {{ r.source.client_name }}, collected configuration data and evaluated it against a set of
+  security checks. It made no changes to the environment, did not exploit any weakness and
+  did not read business data (such as stored files, database contents or secret values).
+  Every finding is backed by the configuration evidence observed at the time of the scan.</p>
+
+  {% if not_evaluated %}
+  <h2>Checks that could not be evaluated</h2>
+  <table class="list">
+    <thead><tr><th>Check</th><th>Region</th><th>Reason</th></tr></thead>
+    <tbody>
+    {% for n in not_evaluated %}
+      <tr><td class="mono">{{ n.rule_id }}</td><td>{{ n.region or "—" }}</td><td>{{ n.reason }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h2>Checks performed</h2>
+  <table class="list small">
+    <thead><tr><th>Check</th><th>Title</th><th>Severity if failed</th><th>Limitations</th></tr></thead>
+    <tbody>
+    {% for c in checks %}
+      <tr><td class="mono">{{ c.rule_id }}</td><td>{{ c.title }}</td>
+          <td>{{ c.severity.value|capitalize }}</td>
+          <td>{{ c.limitations|join(" ") or "—" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# ------------------------------------------------------------ detailed findings #}
+<section class="page">
+  <h1>3. Detailed findings</h1>
+  {% if not groups %}<p>No findings were identified.</p>{% endif %}
+  {% for g in groups %}
+  <article class="finding">
+    <div class="finding-head sev-border-{{ g.severity.value }}">
+      <span class="badge sev-{{ g.severity.value }}">{{ g.severity.value|capitalize }}</span>
+      <span class="finding-number">{{ g.number }}</span>
+      <span class="finding-title">{{ g.title }}</span>
+      <div class="finding-meta">{{ g.category }} · check <span class="mono">{{ g.rule_id }}</span> · {{ g.instances|length }} affected</div>
+    </div>
+    <h3>What is wrong</h3><p>{{ g.description }}</p>
+    <h3>Why it matters</h3><p>{{ g.risk }}</p>
+    <h3>Recommendation</h3><p>{{ g.recommendation }}</p>
+
+    <h3>Affected resources</h3>
+    <table class="list small">
+      <thead><tr><th>Resource</th><th>Region</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for i in g.instances %}
+        <tr><td><strong>{{ i.resource }}</strong>{% if i.resource_id %}<div class="mono tiny">{{ i.resource_id }}</div>{% endif %}</td>
+            <td>{{ i.region }}</td><td>{{ i.message }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Evidence</h3>
+    {% for i in g.instances if i.evidence %}
+      {% for e in i.evidence %}
+      <div class="evidence">
+        <div><strong>{{ i.resource }}:</strong> {{ e.summary }} <span class="muted">(source: {{ e.source }})</span></div>
+        {% if e.observed %}<pre>{{ e.observed }}</pre>{% endif %}
+      </div>
+      {% endfor %}
+    {% endfor %}
+    {% if g.evidence_omitted %}<p class="muted">Evidence for {{ g.evidence_omitted }} further resource(s) is in the JSON export.</p>{% endif %}
+
+    {% if g.framework_refs %}
+    <h3>Framework references</h3>
+    <ul class="refs">
+      {% for ref in g.framework_refs %}
+      <li>{{ ref.framework_name }} {{ ref.version }} — <span class="mono">{{ ref.control_id }}</span> {{ ref.title }}{% if not ref.verified %} <span class="muted">(unverified)</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+{# ------------------------------------------------------------ appendices #}
+<section class="page">
+  <h1>Appendix A. Framework mapping</h1>
+  <p>Controls the findings are relevant to. A reference indicates relevance only; it does not
+  state that a control is met or failed. References marked “unverified” have not yet been
+  checked against the official framework document.</p>
+  {% for f in frameworks %}
+  <h2>{{ f.name }}</h2>
+  <table class="list small">
+    <thead><tr><th>Control</th><th>Title</th><th>Related findings</th></tr></thead>
+    <tbody>
+    {% for c in f.controls %}
+      <tr><td class="mono">{{ c.id }}{% if not c.verified %}*{% endif %}</td><td>{{ c.title }}</td>
+          <td>{{ c.findings|join("; ") }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No findings, so no framework references.</p>
+  {% endfor %}
+
+  <h1>Appendix B. Notes and integrity</h1>
+  {% for note in r.notes %}<p>{{ note }}</p>{% endfor %}
+  <table class="kv small">
+    <tr><th>Scan ID</th><td class="mono">{{ r.source.scan_id }}</td></tr>
+    <tr><th>Scan SHA-256</th><td class="mono">{{ r.source.scan_sha256 }}</td></tr>
+    <tr><th>Report format</th><td>Generated from report dataset version {{ r.schema_version }}; the same data is available as JSON and CSV.</td></tr>
+  </table>
+  <p class="muted">The SHA-256 value identifies the stored scan result this report was produced
+  from. The platform verifies it every time a report is generated.</p>
+</section>
+
+</body>
+</html>

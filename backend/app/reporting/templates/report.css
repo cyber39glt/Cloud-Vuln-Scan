@@ -1,0 +1,98 @@
+/* Print stylesheet for the PDF report (WeasyPrint). One font family (DejaVu Sans,
+   installed in the image) so reports look identical everywhere. */
+
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 18mm;
+  @top-left { content: string(consultancy); font-size: 8pt; color: #6b7785; }
+  @top-right { content: "CONFIDENTIAL — " string(client); font-size: 8pt; color: #8e1b1b; }
+  @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #6b7785; }
+}
+@page :first {
+  margin: 0;
+  @top-left { content: none; } @top-right { content: none; } @bottom-center { content: none; }
+}
+
+html { font-family: "DejaVu Sans", sans-serif; font-size: 9.5pt; line-height: 1.45; color: #1b2430; }
+.cover-brand { string-set: consultancy content(); }
+.cover-client { string-set: client content(); }
+
+h1 { font-size: 17pt; color: #1f4e79; margin: 0 0 8pt; border-bottom: 2pt solid #1f4e79; padding-bottom: 3pt; }
+h2 { font-size: 12pt; color: #1f4e79; margin: 16pt 0 6pt; }
+h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.04em; color: #5d6b7c; margin: 10pt 0 2pt; }
+p { margin: 0 0 6pt; }
+.page { break-before: page; }
+.mono { font-family: "DejaVu Sans Mono", monospace; font-size: 0.9em; }
+td.mono { white-space: nowrap; }
+.tiny { font-size: 7pt; color: #5d6b7c; word-break: break-all; }
+.muted { color: #5d6b7c; }
+.small { font-size: 8.5pt; }
+
+/* Cover */
+.cover { box-sizing: border-box; width: 210mm; height: 297mm; padding: 45mm 22mm 20mm;
+  background: #1f4e79; color: #fff; position: relative; }
+.cover-brand { font-size: 14pt; font-weight: bold; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; }
+.cover-title { font-size: 28pt; font-weight: bold; margin: 30mm 0 6mm; line-height: 1.15; }
+.cover-client { font-size: 18pt; margin-bottom: 18mm; }
+.cover-meta { border-collapse: collapse; font-size: 10.5pt; }
+.cover-meta th { text-align: left; font-weight: normal; opacity: 0.75; padding: 2.5pt 14pt 2.5pt 0; vertical-align: top; }
+.cover-meta td { padding: 2.5pt 0; }
+.cover-classification { position: absolute; bottom: 20mm; left: 22mm; right: 22mm; font-size: 9pt;
+  border-top: 1pt solid rgba(255, 255, 255, 0.5); padding-top: 6pt; }
+
+/* Severity colours */
+.badge { display: inline-block; padding: 0.5pt 5pt; border-radius: 7pt; font-size: 7.5pt; font-weight: bold; color: #fff; }
+.sev-critical, .sev-bg-critical { background: #8e1b1b; }
+.sev-high, .sev-bg-high { background: #d0421b; }
+.sev-medium, .sev-bg-medium { background: #c98a00; }
+.sev-low, .sev-bg-low { background: #2f7d4f; }
+.sev-informational, .sev-bg-informational { background: #6b7785; }
+.sev-border-critical { border-left-color: #8e1b1b; }
+.sev-border-high { border-left-color: #d0421b; }
+.sev-border-medium { border-left-color: #c98a00; }
+.sev-border-low { border-left-color: #2f7d4f; }
+.sev-border-informational { border-left-color: #6b7785; }
+
+/* Executive summary */
+.rating { display: inline-block; border: 1pt solid #d9e0e8; border-radius: 4pt; padding: 6pt 12pt; margin: 6pt 0 10pt; }
+.rating-label { display: block; font-size: 8pt; color: #5d6b7c; text-transform: uppercase; }
+.rating-value { font-size: 16pt; font-weight: bold; }
+.rating-critical .rating-value { color: #8e1b1b; }
+.rating-high .rating-value { color: #d0421b; }
+.rating-medium .rating-value { color: #c98a00; }
+.rating-low .rating-value { color: #2f7d4f; }
+.severity-table { border-collapse: collapse; width: 70%; margin-bottom: 8pt; }
+.severity-table td, .severity-table th { padding: 1.5pt 6pt; border-bottom: 0.5pt solid #d9e0e8; text-align: left; }
+.bar-col { width: 55%; }
+.bar { height: 7pt; border-radius: 2pt; }
+.w0 { width: 0; visibility: hidden; } .w5 { width: 5%; } .w10 { width: 10%; } .w15 { width: 15%; } .w20 { width: 20%; }
+.w25 { width: 25%; } .w30 { width: 30%; } .w35 { width: 35%; } .w40 { width: 40%; } .w45 { width: 45%; }
+.w50 { width: 50%; } .w55 { width: 55%; } .w60 { width: 60%; } .w65 { width: 65%; } .w70 { width: 70%; }
+.w75 { width: 75%; } .w80 { width: 80%; } .w85 { width: 85%; } .w90 { width: 90%; } .w95 { width: 95%; }
+.w100 { width: 100%; }
+.num { text-align: right; }
+.priority { padding-left: 12pt; }
+.priority li { margin-bottom: 1.5pt; }
+.callout { background: #fff6df; border-left: 3pt solid #c98a00; padding: 6pt 8pt; }
+
+/* Tables */
+table.list, table.kv { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+table.list th { text-align: left; font-size: 8pt; text-transform: uppercase; color: #5d6b7c;
+  border-bottom: 1pt solid #1f4e79; padding: 3pt 4pt; }
+table.list td { border-bottom: 0.5pt solid #d9e0e8; padding: 2.5pt 4pt; vertical-align: top; }
+table.list thead { display: table-header-group; } /* repeat headers on each page */
+table.list tr { break-inside: avoid; }
+table.kv th { text-align: left; width: 32%; color: #5d6b7c; font-weight: normal; padding: 2pt 6pt 2pt 0; vertical-align: top; }
+table.kv td { padding: 2pt 0; word-break: break-all; }
+
+/* Findings */
+.finding { margin-bottom: 14pt; }
+.finding-head { border-left: 4pt solid #d9e0e8; padding: 2pt 0 2pt 8pt; margin-bottom: 4pt; break-after: avoid; }
+.finding-number { font-weight: bold; margin: 0 4pt; }
+.finding-title { font-size: 11.5pt; font-weight: bold; }
+.finding-meta { font-size: 8pt; color: #5d6b7c; margin-top: 2pt; }
+h3 { break-after: avoid; }
+.evidence { margin-bottom: 4pt; break-inside: avoid; font-size: 8.5pt; }
+pre { font-family: "DejaVu Sans Mono", monospace; font-size: 7pt; background: #f0f3f7; padding: 4pt 6pt;
+  white-space: pre-wrap; word-break: break-all; margin: 2pt 0 4pt; border-radius: 2pt; }
+.refs { padding-left: 12pt; margin: 0; font-size: 8.5pt; }

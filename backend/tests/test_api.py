@@ -170,6 +170,7 @@ def test_another_clients_data_is_not_found(api, db):
         f"scan-jobs/{job['id']}",
         f"scans/{scan.id}/report",
         f"scans/{scan.id}/report.csv",
+        f"scans/{scan.id}/report.pdf",
     ):
         response = api.get(f"{base}/{path}")
         assert response.status_code == 404, path
@@ -236,3 +237,22 @@ def test_onboarding_instructions(api):
     assert all(f"/subscriptions/{SUB}" in c for c in steps["role_commands"])
     other = _client(api, "Globex")
     assert api.get(f"/api/v1/clients/{other}/connections/{aws['id']}/onboarding").status_code == 404
+
+
+def test_pdf_report_download_is_audited(api, db):
+    from sqlalchemy import select
+
+    from app.storage.models import AuditEvent
+
+    client_id = _client(api)
+    _, assessment_id = _aws_assessment(api, client_id)
+    scan = repo.save_scan_result(
+        db, uuid.UUID(client_id), uuid.UUID(assessment_id), RuleEngine().run(sample_aws_inventory())
+    )
+    response = api.get(f"/api/v1/clients/{client_id}/scans/{scan.id}/report.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert f'filename="acme-ltd_{str(scan.id)[:8]}.pdf"' in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF-")
+    exports = db.scalars(select(AuditEvent).where(AuditEvent.action == "report.exported")).all()
+    assert [e.details["format"] for e in exports] == ["pdf"]

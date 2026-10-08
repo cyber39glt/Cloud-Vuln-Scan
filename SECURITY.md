@@ -67,6 +67,7 @@ remove it from history. Deleting the file is not enough; it remains in git histo
 | CSRF / browser attacks | `SameSite=Strict`, JSON-only POSTs, foreign-Origin refusal, host allowlist |
 | Authorization | Admin / Consultant roles; Consultants see only assigned clients (others are "not found"); enforced by one shared dependency on every endpoint, with a test covering every route |
 | Dashboard | Same origin as the API (no CORS); session only in an `HttpOnly` cookie; strict Content-Security-Policy (no inline or third-party code); only build files served ([ADR 0021](docs/decisions/0021-dashboard.md)) |
+| Reports | CSV cells neutralized against formula injection; PDF templates auto-escape client text and the PDF renderer may not fetch any URL or file ([ADR 0022](docs/decisions/0022-pdf-reports.md)) |
 | Audit | Append-only log (database refuses changes) of authentication, account changes, data access, scans and exports; never contains secrets |
 
 Details: [ADR 0009](docs/decisions/0009-authentication-and-authorization.md),

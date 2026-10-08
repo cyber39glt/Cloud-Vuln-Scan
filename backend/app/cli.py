@@ -54,6 +54,7 @@ from app.providers.azure.errors import describe_azure_error
 from app.providers.azure.session import AzureConnection, admin_consent_url
 from app.providers.common import ValidationReport
 from app.reporting.exports import to_csv, to_json
+from app.reporting.pdf import to_pdf
 from app.reporting.report import report_for_scan
 from app.scanning import WrongAccountError, scan_aws, scan_azure
 from app.storage import repository as repo
@@ -420,7 +421,7 @@ def _assessments_export(args: argparse.Namespace) -> int:
         slug = re.sub(r"[^A-Za-z0-9]+", "-", client.name).strip("-").lower()[:40] or "client"
         stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         base = f"{slug}_{str(scan_id)[:8]}_{stamp}"
-        renderers = {"json": to_json, "csv": to_csv}
+        renderers = {"json": to_json, "csv": to_csv, "pdf": to_pdf}
         formats = renderers if args.format == "all" else {args.format: renderers[args.format]}
 
         EXPORT_DIR.mkdir(exist_ok=True)
@@ -615,7 +616,7 @@ def _parser() -> argparse.ArgumentParser:
     export = assessments.add_parser("export", help="write JSON/CSV report files")
     export.add_argument("--client", required=True, help="client name or ID")
     export.add_argument("--scan", required=True, help="scan ID")
-    export.add_argument("--format", choices=("json", "csv", "all"), default="all")
+    export.add_argument("--format", choices=("json", "csv", "pdf", "all"), default="all")
     export.set_defaults(handler=_assessments_export)
     return parser
 

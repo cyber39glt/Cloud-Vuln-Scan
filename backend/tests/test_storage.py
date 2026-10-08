@@ -243,7 +243,8 @@ def test_cli_exports_a_stored_scan_as_json_and_csv(cli_db, capsys, tmp_path, mon
     assert "contain client data" in out
 
     files = sorted((tmp_path / "exports").iterdir())
-    assert [f.suffix for f in files] == [".csv", ".json"]
+    assert [f.suffix for f in files] == [".csv", ".json", ".pdf"]
+    assert files[2].read_bytes().startswith(b"%PDF-")
     assert all(f.name.startswith("acme-ltd-emea_") for f in files)  # safe file names
     assert all(stat.S_IMODE(f.stat().st_mode) == 0o600 for f in files)  # owner-only
 
@@ -375,4 +376,4 @@ def test_cli_azure_scan_is_saved_and_exportable(cli_db, capsys, tmp_path, monkey
     assert cli.main(["assessments", "list", "--client", "Acme Ltd"]) == 0
     assert f"azure {AZ_SUB}  5 findings" in capsys.readouterr().out
     assert cli.main(["assessments", "export", "--client", "Acme Ltd", "--scan", scan_id]) == 0
-    assert len(list((tmp_path / "exports").iterdir())) == 2
+    assert len(list((tmp_path / "exports").iterdir())) == 3

@@ -55,7 +55,7 @@ operations. No remediation, modification, deletion, deployment or exploitation.
 | `frameworks` | CIS / NIST CSF 2.0 / SOC 2 mapping data | **M1 ✓** |
 | `storage` | Database models, migrations, client-scoped repository ([data model](data-model.md)) | **M4 ✓** |
 | `scanning` | One safe sequence: connect → verify account → collect → evaluate | **M3 ✓**; background worker + job queue **M8 ✓** |
-| `reporting` | One dataset → JSON, CSV, PDF ([exports](exports.md)) | JSON/CSV **M5 ✓**; PDF M11 |
+| `reporting` | One dataset → JSON, CSV, PDF ([exports](exports.md)) | JSON/CSV **M5 ✓**; PDF **M11 ✓** ([exports](exports.md)) |
 
 ## Assessment data flow
 
@@ -90,6 +90,14 @@ The same container image runs everywhere; only environment variables differ
 | Config source | `.env` | `.env.example` copy | Platform secret manager |
 
 ## What exists today
+
+### M11: PDF reports
+
+- Client-facing PDF (cover, executive summary, scope and method, detailed findings with
+  evidence, framework appendix, integrity details) rendered with WeasyPrint from the
+  same dataset as the dashboard, JSON and CSV. Escaped templates; the renderer may not
+  fetch anything ([exports](exports.md), [ADR 0022](decisions/0022-pdf-reports.md)).
+- Download from the dashboard, the API (`.../report.pdf`) or the CLI (`--format pdf`).
 
 ### M10: dashboard
 
@@ -202,7 +210,7 @@ The same container image runs everywhere; only environment variables differ
 | **M8** | **API + background worker + scan progress** ✓ ([ADR 0019](decisions/0019-api-worker-and-pre-auth-boundary.md)) |
 | **M9** | **Authentication (Argon2id, TOTP MFA), roles, client assignment, audit log** ✓ ([ADR 0020](decisions/0020-authentication-implementation.md)) |
 | **M10** | **Dashboard** ✓ ([guide](dashboard.md), [ADR 0021](decisions/0021-dashboard.md)) |
-| M11 | PDF report |
+| **M11** | **PDF report** ✓ ([ADR 0022](decisions/0022-pdf-reports.md)) |
 | M12 | Finding review workflow and assessment finalization |
 | M13 | Hardening: threat model, generated least-privilege policies, security review |
 | M14 | Hosting evaluation and deployment |
