@@ -1,0 +1,734 @@
+{
+  "$defs": {
+    "Category": {
+      "enum": [
+        "identity_access",
+        "network",
+        "storage",
+        "exposure",
+        "logging_monitoring"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "CheckResult": {
+      "additionalProperties": false,
+      "description": "The outcome of one rule for one resource (or for the whole account).",
+      "properties": {
+        "account_id": {
+          "title": "Account Id",
+          "type": "string"
+        },
+        "evidence": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/$defs/Provider"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Id"
+        },
+        "resource_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Name"
+        },
+        "resource_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Type"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "rule_id",
+        "provider",
+        "account_id",
+        "status",
+        "message"
+      ],
+      "title": "CheckResult",
+      "type": "object"
+    },
+    "CheckStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "error",
+        "not_applicable"
+      ],
+      "title": "CheckStatus",
+      "type": "string"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Proof behind a result: where the data came from and the exact fields observed.\n\nValues are redacted on creation, so a secret that slipped into collected data\ncannot reach a report through evidence.",
+      "properties": {
+        "collected_at": {
+          "format": "date-time",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "observed": {
+          "additionalProperties": true,
+          "title": "Observed",
+          "type": "object"
+        },
+        "source_operation": {
+          "title": "Source Operation",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_operation",
+        "collected_at",
+        "summary"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FindingReviewInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "justification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Justification"
+        },
+        "original_severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "reviewed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed At"
+        },
+        "reviewed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed By"
+        },
+        "severity_overridden": {
+          "default": false,
+          "title": "Severity Overridden",
+          "type": "boolean"
+        },
+        "status": {
+          "default": "open",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "original_severity"
+      ],
+      "title": "FindingReviewInfo",
+      "type": "object"
+    },
+    "Framework": {
+      "enum": [
+        "cis_aws",
+        "cis_azure",
+        "nist_csf",
+        "soc2"
+      ],
+      "title": "Framework",
+      "type": "string"
+    },
+    "FrameworkRef": {
+      "additionalProperties": false,
+      "properties": {
+        "control_id": {
+          "title": "Control Id",
+          "type": "string"
+        },
+        "framework": {
+          "$ref": "#/$defs/Framework"
+        },
+        "framework_name": {
+          "title": "Framework Name",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "framework",
+        "framework_name",
+        "version",
+        "control_id",
+        "title",
+        "verified"
+      ],
+      "title": "FrameworkRef",
+      "type": "object"
+    },
+    "NotEvaluated": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Region"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "region",
+        "reason"
+      ],
+      "title": "NotEvaluated",
+      "type": "object"
+    },
+    "Provider": {
+      "enum": [
+        "aws",
+        "azure"
+      ],
+      "title": "Provider",
+      "type": "string"
+    },
+    "ReportFinding": {
+      "additionalProperties": false,
+      "description": "A finding as reported: `severity` is the EFFECTIVE severity (after any\noverride); the scanner's original severity is in `review.original_severity`.",
+      "properties": {
+        "account_id": {
+          "title": "Account Id",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "detected_at": {
+          "format": "date-time",
+          "title": "Detected At",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "framework_refs": {
+          "items": {
+            "$ref": "#/$defs/FrameworkRef"
+          },
+          "title": "Framework Refs",
+          "type": "array"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/$defs/Provider"
+        },
+        "recommendation": {
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Region"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Resource Id"
+        },
+        "resource_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Resource Name"
+        },
+        "resource_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Resource Type"
+        },
+        "review": {
+          "$ref": "#/$defs/FindingReviewInfo"
+        },
+        "risk": {
+          "title": "Risk",
+          "type": "string"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "rule_version": {
+          "title": "Rule Version",
+          "type": "integer"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "rule_id",
+        "rule_version",
+        "title",
+        "provider",
+        "account_id",
+        "category",
+        "severity",
+        "resource_id",
+        "resource_name",
+        "resource_type",
+        "region",
+        "message",
+        "description",
+        "risk",
+        "recommendation",
+        "evidence",
+        "framework_refs",
+        "detected_at",
+        "review"
+      ],
+      "title": "ReportFinding",
+      "type": "object"
+    },
+    "ReportSource": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment_id": {
+          "format": "uuid",
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "assessment_name": {
+          "title": "Assessment Name",
+          "type": "string"
+        },
+        "assessment_status": {
+          "title": "Assessment Status",
+          "type": "string"
+        },
+        "client_name": {
+          "title": "Client Name",
+          "type": "string"
+        },
+        "consultancy": {
+          "title": "Consultancy",
+          "type": "string"
+        },
+        "finalized_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalized At"
+        },
+        "finalized_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finalized By"
+        },
+        "report_status": {
+          "default": "draft",
+          "enum": [
+            "draft",
+            "final"
+          ],
+          "title": "Report Status",
+          "type": "string"
+        },
+        "scan_id": {
+          "format": "uuid",
+          "title": "Scan Id",
+          "type": "string"
+        },
+        "scan_sha256": {
+          "title": "Scan Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "consultancy",
+        "client_name",
+        "assessment_id",
+        "assessment_name",
+        "assessment_status",
+        "scan_id",
+        "scan_sha256"
+      ],
+      "title": "ReportSource",
+      "type": "object"
+    },
+    "ReportSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "by_category": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Category"
+          },
+          "title": "By Category",
+          "type": "object"
+        },
+        "by_review_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "By Review Status",
+          "type": "object"
+        },
+        "by_rule": {
+          "items": {
+            "$ref": "#/$defs/RuleGroup"
+          },
+          "title": "By Rule",
+          "type": "array"
+        },
+        "by_severity": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Severity"
+          },
+          "title": "By Severity",
+          "type": "object"
+        },
+        "checks_by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/CheckStatus"
+          },
+          "title": "Checks By Status",
+          "type": "object"
+        },
+        "rules_run": {
+          "title": "Rules Run",
+          "type": "integer"
+        },
+        "total_findings": {
+          "title": "Total Findings",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_findings",
+        "by_severity",
+        "by_category",
+        "by_rule",
+        "checks_by_status",
+        "rules_run"
+      ],
+      "title": "ReportSummary",
+      "type": "object"
+    },
+    "RuleGroup": {
+      "additionalProperties": false,
+      "description": "Findings grouped by rule for display, e.g. 'SSH open to the internet: 7'.",
+      "properties": {
+        "affected_resources": {
+          "title": "Affected Resources",
+          "type": "integer"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "title",
+        "severity",
+        "affected_resources"
+      ],
+      "title": "RuleGroup",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "informational"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted_risks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReportFinding"
+      },
+      "title": "Accepted Risks",
+      "type": "array"
+    },
+    "account_id": {
+      "title": "Account Id",
+      "type": "string"
+    },
+    "check_results": {
+      "items": {
+        "$ref": "#/$defs/CheckResult"
+      },
+      "title": "Check Results",
+      "type": "array"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "false_positives": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReportFinding"
+      },
+      "title": "False Positives",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/ReportFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "not_evaluated": {
+      "items": {
+        "$ref": "#/$defs/NotEvaluated"
+      },
+      "title": "Not Evaluated",
+      "type": "array"
+    },
+    "notes": {
+      "default": [
+        "This is a technical security assessment of cloud configuration at a point in time. It is not an audit and does not certify compliance with any framework.",
+        "Framework references indicate controls a finding is relevant to; they do not state that a control is met or failed. References marked unverified have not yet been checked against the official framework document.",
+        "Checks reported as 'not evaluated' could not be completed (for example because access was denied). Their absence from the findings does not mean the area is secure."
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "provider": {
+      "$ref": "#/$defs/Provider"
+    },
+    "regions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Regions",
+      "type": "array"
+    },
+    "scan_completed_at": {
+      "format": "date-time",
+      "title": "Scan Completed At",
+      "type": "string"
+    },
+    "scan_started_at": {
+      "format": "date-time",
+      "title": "Scan Started At",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ReportSource"
+    },
+    "summary": {
+      "$ref": "#/$defs/ReportSummary"
+    }
+  },
+  "required": [
+    "generated_at",
+    "source",
+    "provider",
+    "account_id",
+    "regions",
+    "engine_version",
+    "scan_started_at",
+    "scan_completed_at",
+    "summary",
+    "findings",
+    "not_evaluated",
+    "check_results"
+  ],
+  "title": "CloudSecura assessment report v1.1",
+  "type": "object"
+}

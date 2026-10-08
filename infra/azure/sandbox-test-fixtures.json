@@ -1,0 +1,130 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "SANDBOX ONLY - deliberately insecure resources for testing the scanner. NSGs are attached to nothing; the storage account is empty (near-zero cost). NEVER deploy this in a client or production subscription. Delete the resource group when finished.",
+    "expectedFindings": "NET-001: cvs-test-ssh-open, cvs-test-all-open | NET-002: cvs-test-rdp-open, cvs-test-all-open | none: cvs-test-ssh-restricted | AZ-STO-001: the cvstest... storage account"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": { "description": "Region for the test resources." }
+    }
+  },
+  "variables": {
+    "storageName": "[concat('cvstest', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "cvs-test-ssh-open",
+      "location": "[parameters('location')]",
+      "tags": { "purpose": "TEST - expect NET-001 FAIL" },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-ssh-from-internet",
+            "properties": {
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "cvs-test-rdp-open",
+      "location": "[parameters('location')]",
+      "tags": { "purpose": "TEST - expect NET-002 FAIL" },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-rdp-from-any",
+            "properties": {
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "cvs-test-all-open",
+      "location": "[parameters('location')]",
+      "tags": { "purpose": "TEST - expect NET-001 and NET-002 FAIL" },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-everything-from-any",
+            "properties": {
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "cvs-test-ssh-restricted",
+      "location": "[parameters('location')]",
+      "tags": { "purpose": "TEST - expect NET-001 PASS" },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-ssh-from-private-range",
+            "properties": {
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "10.0.0.0/8",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "tags": { "purpose": "TEST - expect AZ-STO-001 FAIL" },
+      "sku": { "name": "Standard_LRS" },
+      "kind": "StorageV2",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true
+      }
+    }
+  ]
+}

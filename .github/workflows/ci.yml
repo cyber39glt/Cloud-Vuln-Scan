@@ -22,13 +22,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
+        with:
+          persist-credentials: false # the token is not left in .git/config
 
       - name: Create .env from the example
-        run: cp .env.example .env
+        # curl talks to the API over plain http://127.0.0.1, so the smoke test needs
+        # cookies without the Secure flag (production refuses this setting).
+        run: |
+          cp .env.example .env
+          sed -i "s/^SESSION_COOKIE_SECURE=.*/SESSION_COOKIE_SECURE=false/" .env
+          sed -i "s/^APP_SECRET_KEY=.*/APP_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')/" .env
 
-      - name: Build images and start PostgreSQL + API
-        run: docker compose up --build --detach --wait
+      - name: Build images and start PostgreSQL + API + worker
+        run: docker compose up --build --detach --wait db api worker
+
+      - name: Apply database migrations to a fresh database
+        run: docker compose run --rm api alembic upgrade head
+
+      - name: Database models match the migrations (no forgotten migration)
+        run: docker compose run --rm api alembic check
 
       - name: Ruff lint
         run: docker compose run --rm --no-deps api ruff check --output-format=github .
@@ -44,6 +57,9 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:8000/health
           curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
 
+      - name: Smoke test login -> API -> queue -> worker
+        run: bash scripts/ci-smoke.sh
+
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs
@@ -57,22 +73,72 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - name: Build the prod target
-        run: docker build --target prod --tag cloud-vuln-scan-api:ci ./backend
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Build the prod target (includes the dashboard)
+        run: >
+          docker build --target prod --build-context frontend=./frontend
+          --tag cloud-vuln-scan-api:ci ./backend
       - name: Production image must run as a non-root user
         run: test "$(docker run --rm --entrypoint id cloud-vuln-scan-api:ci -un)" = "app"
+      - name: Production image contains the built dashboard
+        run: docker run --rm --entrypoint test cloud-vuln-scan-api:ci -f /app/web/index.html
+
+  production-stack:
+    name: Production stack (HTTPS, isolation, database login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Start deploy/compose.prod.yml with DOMAIN=localhost and check it
+        run: bash scripts/prod-smoke.sh
+
+  dashboard:
+    name: Dashboard (type-check, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Type-check, test and build in the same Node image as development
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/web" -w /web node:24-alpine
+          sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test && npm run build"
 
   secret-scan:
     name: Secret scan (Gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
         with:
+          persist-credentials: false # the token is not left in .git/config
           fetch-depth: 0 # full history: a secret deleted later is still leaked
       - name: Gitleaks
         run: >
           docker run --rm -v "$GITHUB_WORKSPACE:/repo"
           zricethezav/gitleaks:v8.30.1
           git /repo --redact --no-banner --verbose
+
+  dependency-audit:
+    name: Dependency audit (known vulnerabilities)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (pinned to a commit)
+        with:
+          persist-credentials: false # the token is not left in .git/config
+      - name: Python dependencies (exact versions from uv.lock)
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/backend:/src:ro" python:3.12-slim
+          sh -c "pip install -q uv==0.12.22 pip-audit==2.10.1
+          && uv export --project /src --frozen --no-dev --no-hashes -o /tmp/requirements.txt
+          && pip-audit -r /tmp/requirements.txt --no-deps --disable-pip"
+      - name: Dashboard dependencies (package-lock.json)
+        run: >
+          docker run --rm -v "$GITHUB_WORKSPACE/frontend:/web:ro" -w /web node:24-alpine
+          npm audit --audit-level=high

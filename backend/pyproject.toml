@@ -2,6 +2,7 @@
 name = "cloud-vuln-scan"
 version = "0.1.0"
 description = "Read-only cloud security assessment platform for AWS and Azure"
+license = "Apache-2.0"
 readme = "../README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -10,13 +11,25 @@ dependencies = [
     "pydantic-settings>=2.15,<3.0",
     "sqlalchemy>=2.1,<2.2",
     "psycopg[binary]>=3.3,<3.4",
+    "boto3>=1.43,<2",
+    "alembic>=1.20,<2",
+    "azure-identity>=1.26,<2",
+    "azure-mgmt-network>=33,<34",
+    "azure-mgmt-storage>=25.2,<26",
+    "argon2-cffi>=25.1,<26",
+    "pyotp>=2.9,<3",
+    "cryptography>=50,<51",
+    "weasyprint>=70,<71",
+    "jinja2>=3.1,<4",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1,<10",
+    "pypdf>=6,<7",
     "httpx2>=2.13,<3",
     "ruff>=0.16,<0.17",
+    "moto>=5.2,<6",
 ]
 
 # ---------------------------------------------------------------- Ruff
@@ -36,8 +49,9 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests use plain `assert` and fixed fake credentials on purpose.
-"tests/**" = ["S101", "S105", "S106"]
+# Tests use plain `assert`, fixed fake credentials and "any address" IP literals
+# (0.0.0.0 as firewall data, not a socket binding) on purpose.
+"tests/**" = ["S101", "S104", "S105", "S106"]
 
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]

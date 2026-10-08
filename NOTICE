@@ -1,0 +1,30 @@
+CloudSecura
+Copyright 2026 cyber39glt and the CloudSecura contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles or depends on third-party components under their own
+licences. The main ones are listed below; each package's own licence file is
+authoritative.
+
+Bundled in the web dashboard:
+- Inter font (Rasmus Andersson), SIL Open Font License 1.1.
+  Licence text: frontend/public/licenses/Inter-OFL-1.1.txt
+  (served by the dashboard at /licenses/Inter-OFL-1.1.txt).
+- React, React DOM, React Router, qrcode: MIT licence.
+
+Python dependencies (installed unmodified, as separate libraries):
+- psycopg (PostgreSQL driver): GNU LGPL v3.0.
+- certifi: Mozilla Public License 2.0.
+- pyphen: used under the GNU LGPL v2.1+ / MPL 1.1 options of its tri-licence.
+- WeasyPrint, FastAPI, SQLAlchemy, Pydantic, boto3, Azure SDK, cryptography and
+  others: BSD, MIT or Apache-2.0 licences.
+
+Container images also contain operating-system packages (Debian; for example Pango
+under the GNU LGPL and the DejaVu fonts under their free licence) and PostgreSQL
+(PostgreSQL Licence) and Caddy (Apache-2.0) images, each under its own licence.
+
+Framework references: CIS Benchmarks, NIST CSF 2.0 and SOC 2 are referenced by
+control identifier and short title only; no proprietary framework text is included
+(docs/decisions/0008-framework-mapping.md). CIS, NIST and AICPA retain all rights in
+their frameworks.

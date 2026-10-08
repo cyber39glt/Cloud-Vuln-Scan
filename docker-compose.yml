@@ -1,4 +1,5 @@
-# Local development environment: PostgreSQL + the API.
+# Local development environment: PostgreSQL + the API + the scan worker + the
+# dashboard (Vite dev server with hot reload, at http://localhost:5173).
 # Use scripts/dev.ps1 rather than calling docker compose directly.
 #
 # Values like ${POSTGRES_USER} are read from the .env file next to this file.
@@ -41,6 +42,8 @@ services:
     volumes:
       # Mount the source code so edits on your machine apply without rebuilding.
       - ./backend:/app
+      # Client onboarding templates, read-only (tests check them against settings).
+      - ./infra:/infra:ro
     ports:
       # 127.0.0.1 = only reachable from this computer, not from your network.
       - "127.0.0.1:${API_PORT:-8000}:8000"
@@ -55,5 +58,58 @@ services:
       retries: 6
       start_period: 10s
 
+  worker:
+    # Same image and code as the API, different command: it runs queued scans.
+    build:
+      context: ./backend
+      target: dev
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+    volumes:
+      - ./backend:/app
+    # No ports: the worker only talks to the database and (read-only) to cloud APIs.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Docker sends SIGTERM on stop; give a running scan time to finish first.
+    stop_grace_period: 2m
+    healthcheck:
+      # Healthy while the worker loop keeps touching its marker file.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/worker-alive') > 120)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 15s
+
+  web:
+    # The dashboard in development: edits in frontend/ show up instantly. API calls
+    # are forwarded to the api container. (In production the API serves the built
+    # dashboard itself; see backend/Dockerfile.)
+    image: node:24-alpine
+    working_dir: /web
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run dev"]
+    environment:
+      API_PROXY_TARGET: http://api:8000
+      VITE_POLLING: "true"
+    volumes:
+      - ./frontend:/web
+      # node_modules stays inside Docker (faster, and Windows-safe).
+      - web_node_modules:/web/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
 volumes:
   pgdata:
+  web_node_modules:

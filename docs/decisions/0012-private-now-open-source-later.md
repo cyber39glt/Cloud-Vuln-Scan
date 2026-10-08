@@ -1,6 +1,6 @@
 # 0012. Private repository now, open source later
 
-- **Status:** Accepted
+- **Status:** Accepted; completed by [ADR 0027](0027-licence-and-public-release.md) (Apache-2.0)
 - **Date:** 2026-10-03
 
 ## Decision

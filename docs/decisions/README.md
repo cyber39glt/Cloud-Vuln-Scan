@@ -17,6 +17,21 @@ supersedes the old one, so the history of *why* is preserved.
 | [0009](0009-authentication-and-authorization.md) | Local auth, mandatory TOTP MFA, roles, assigned-client isolation | Accepted |
 | [0010](0010-hosting-agnostic-containers.md) | Hosting-agnostic containers, environment-based configuration | Accepted |
 | [0011](0011-windows-first-docker-development.md) | Windows-first, Docker-based developer experience | Accepted |
-| [0012](0012-private-now-open-source-later.md) | Private repository now, open source later | Accepted |
+| [0012](0012-private-now-open-source-later.md) | Private repository now, open source later | Accepted (licence chosen in 0027) |
+| [0013](0013-finding-granularity-and-collection-gaps.md) | Finding granularity, collection gaps, rule purity | Accepted |
+| [0014](0014-aws-connector-and-dev-identity.md) | AWS connector: guard design, client role, dev identity | Accepted |
+| [0015](0015-persistence-and-client-isolation.md) | Persistence, database-enforced client isolation, immutable results | Accepted |
+| [0016](0016-report-dataset-and-exports.md) | Report dataset; JSON/CSV exports; CSV-injection protection | Accepted |
+| [0017](0017-azure-connector.md) | Azure connector: pipeline guard, client access, dev identity | Accepted |
+| [0018](0018-rule-expansion-r1.md) | Rule expansion R1: credential report exception, no guessing, ARM lists | Accepted |
+| [0019](0019-api-worker-and-pre-auth-boundary.md) | Data API, scan worker, and the boundary before user authentication | Accepted (partly superseded by 0020) |
+| [0020](0020-authentication-implementation.md) | Authentication and authorization: implementation details | Accepted (lockout amended by 0025) |
+| [0021](0021-dashboard.md) | Dashboard: same-origin React app with a strict Content-Security-Policy | Accepted |
+| [0022](0022-pdf-reports.md) | PDF reports: WeasyPrint with escaped templates and no resource fetching | Accepted |
+| [0023](0023-finding-review-and-finalization.md) | Finding review layer and assessment finalization | Accepted |
+| [0024](0024-onboarding-and-public-showcase.md) | First-run setup, invitation links, public showcase page, redesign | Accepted |
+| [0025](0025-least-privilege-and-security-review.md) | Generated least-privilege permissions; M13 security review fixes | Accepted |
+| [0026](0026-production-deployment.md) | Production deployment: one server, Caddy, restricted database login, keyed integrity | Accepted (host to be chosen) |
+| [0027](0027-licence-and-public-release.md) | Apache-2.0 licence and public release preparation | Accepted |
 
 To add one, copy the structure of an existing ADR and use the next number.

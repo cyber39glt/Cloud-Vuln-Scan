@@ -1,0 +1,517 @@
+# Rule -> framework control references (ADR 0008).
+#
+# Licensing: NIST CSF is public domain, so official titles are used. CIS Benchmarks
+# and the AICPA Trust Services Criteria are copyrighted: only control IDs and our own
+# short paraphrased titles are stored here, never their text.
+#
+# verified = false means nobody has yet checked the reference against the official
+# document for the version listed. CIS section numbers change between versions.
+# SOC 2 references are interpretive ("relevant to"), never a compliance claim.
+
+[frameworks.cis_aws]
+name = "CIS Amazon Web Services Foundations Benchmark"
+version = "3.0.0"
+providers = ["aws"]
+
+[frameworks.cis_azure]
+name = "CIS Microsoft Azure Foundations Benchmark"
+version = "2.1.0"
+providers = ["azure"]
+
+[frameworks.nist_csf]
+name = "NIST Cybersecurity Framework"
+version = "2.0"
+providers = ["aws", "azure"]
+
+[frameworks.soc2]
+name = "AICPA Trust Services Criteria (SOC 2)"
+version = "2017 (revised points of focus 2022)"
+providers = ["aws", "azure"]
+
+# ------------------------------------------------------------------ NET-001 (SSH)
+[[mapping]]
+rule = "NET-001"
+framework = "cis_aws"
+control = "5.2"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv4)"
+verified = false
+
+[[mapping]]
+rule = "NET-001"
+framework = "cis_aws"
+control = "5.3"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv6)"
+verified = false
+
+[[mapping]]
+rule = "NET-001"
+framework = "cis_azure"
+control = "6.2"
+title = "SSH access from the internet is evaluated and restricted"
+verified = false
+
+[[mapping]]
+rule = "NET-001"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = true
+
+[[mapping]]
+rule = "NET-001"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+# ------------------------------------------------------------------ NET-002 (RDP)
+[[mapping]]
+rule = "NET-002"
+framework = "cis_aws"
+control = "5.2"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv4)"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "cis_aws"
+control = "5.3"
+title = "Security groups do not allow internet ingress to remote administration ports (IPv6)"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "cis_azure"
+control = "6.1"
+title = "RDP access from the internet is evaluated and restricted"
+verified = false
+
+[[mapping]]
+rule = "NET-002"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = true
+
+[[mapping]]
+rule = "NET-002"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+# ------------------------------------------------------------------ AWS-LOG-001
+[[mapping]]
+rule = "AWS-LOG-001"
+framework = "cis_aws"
+control = "3.1"
+title = "CloudTrail is enabled in all regions"
+verified = false
+
+[[mapping]]
+rule = "AWS-LOG-001"
+framework = "nist_csf"
+control = "PR.PS-04"
+title = "Log records are generated and made available for continuous monitoring"
+verified = true
+
+[[mapping]]
+rule = "AWS-LOG-001"
+framework = "nist_csf"
+control = "DE.CM-03"
+title = "Personnel activity and technology usage are monitored to find potentially adverse events"
+verified = true
+
+[[mapping]]
+rule = "AWS-LOG-001"
+framework = "soc2"
+control = "CC7.2"
+title = "System components are monitored for anomalies indicative of malicious acts"
+verified = false
+
+# ------------------------------------------------------------------ AZ-STO-001
+[[mapping]]
+rule = "AZ-STO-001"
+framework = "cis_azure"
+control = "3.7"
+title = "Anonymous blob access is disabled for storage accounts"
+verified = false
+
+[[mapping]]
+rule = "AZ-STO-001"
+framework = "nist_csf"
+control = "PR.DS-01"
+title = "The confidentiality, integrity, and availability of data-at-rest are protected"
+verified = true
+
+[[mapping]]
+rule = "AZ-STO-001"
+framework = "nist_csf"
+control = "PR.AA-05"
+title = "Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed"
+verified = true
+
+[[mapping]]
+rule = "AZ-STO-001"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+# ------------------------------------------------------------------ AWS-IAM-001 (Root user)
+[[mapping]]
+rule = "AWS-IAM-001"
+framework = "cis_aws"
+control = "1.5"
+title = "MFA is enabled for the root user"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-001"
+framework = "nist_csf"
+control = "PR.AA-03"
+title = "Users, services, and hardware are authenticated"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-001"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-IAM-002 (Root access keys)
+[[mapping]]
+rule = "AWS-IAM-002"
+framework = "cis_aws"
+control = "1.4"
+title = "No access keys exist for the root user"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-002"
+framework = "nist_csf"
+control = "PR.AA-01"
+title = "Identities and credentials for authorized users, services, and hardware are managed by the organization"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-002"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-IAM-003 (Console users MFA)
+[[mapping]]
+rule = "AWS-IAM-003"
+framework = "cis_aws"
+control = "1.10"
+title = "MFA is enabled for IAM users with a console password"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-003"
+framework = "nist_csf"
+control = "PR.AA-03"
+title = "Users, services, and hardware are authenticated"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-003"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-IAM-004 (Unused access keys)
+[[mapping]]
+rule = "AWS-IAM-004"
+framework = "cis_aws"
+control = "1.12"
+title = "Credentials unused for 45 days or more are disabled"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-004"
+framework = "nist_csf"
+control = "PR.AA-01"
+title = "Identities and credentials for authorized users, services, and hardware are managed by the organization"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-004"
+framework = "soc2"
+control = "CC6.2"
+title = "Registration, authorization and removal of system credentials"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-IAM-005 (Password policy)
+[[mapping]]
+rule = "AWS-IAM-005"
+framework = "cis_aws"
+control = "1.8"
+title = "Password policy requires a minimum length of 14 or more"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-005"
+framework = "nist_csf"
+control = "PR.AA-01"
+title = "Identities and credentials for authorized users, services, and hardware are managed by the organization"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-005"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-IAM-006 (AdministratorAccess on users)
+[[mapping]]
+rule = "AWS-IAM-006"
+framework = "cis_aws"
+control = "1.16"
+title = "Policies granting full administrative privileges are not attached"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-006"
+framework = "nist_csf"
+control = "PR.AA-05"
+title = "Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed"
+verified = false
+
+[[mapping]]
+rule = "AWS-IAM-006"
+framework = "soc2"
+control = "CC6.3"
+title = "Role-based access following least privilege and segregation of duties"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-STO-001 (S3 account Block Public Access)
+[[mapping]]
+rule = "AWS-STO-001"
+framework = "cis_aws"
+control = "2.1.4"
+title = "S3 buckets are configured with Block Public Access"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-001"
+framework = "nist_csf"
+control = "PR.DS-01"
+title = "The confidentiality, integrity, and availability of data-at-rest are protected"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-001"
+framework = "nist_csf"
+control = "PR.AA-05"
+title = "Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-001"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-STO-002 (S3 public bucket)
+[[mapping]]
+rule = "AWS-STO-002"
+framework = "cis_aws"
+control = "2.1.4"
+title = "S3 buckets are configured with Block Public Access"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-002"
+framework = "nist_csf"
+control = "PR.DS-01"
+title = "The confidentiality, integrity, and availability of data-at-rest are protected"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-002"
+framework = "nist_csf"
+control = "PR.AA-05"
+title = "Access permissions, entitlements, and authorizations are defined in a policy, managed, enforced, and reviewed"
+verified = false
+
+[[mapping]]
+rule = "AWS-STO-002"
+framework = "soc2"
+control = "CC6.1"
+title = "Logical access security over protected information assets"
+verified = false
+
+
+# ------------------------------------------------------------------ AWS-EXP-001 (RDS public)
+[[mapping]]
+rule = "AWS-EXP-001"
+framework = "cis_aws"
+control = "2.3.3"
+title = "RDS instances are not publicly accessible"
+verified = false
+
+[[mapping]]
+rule = "AWS-EXP-001"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = false
+
+[[mapping]]
+rule = "AWS-EXP-001"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-STO-002 (Secure transfer)
+[[mapping]]
+rule = "AZ-STO-002"
+framework = "cis_azure"
+control = "3.1"
+title = "Secure transfer required is enabled"
+verified = false
+
+[[mapping]]
+rule = "AZ-STO-002"
+framework = "nist_csf"
+control = "PR.DS-02"
+title = "The confidentiality, integrity, and availability of data-in-transit are protected"
+verified = false
+
+[[mapping]]
+rule = "AZ-STO-002"
+framework = "soc2"
+control = "CC6.7"
+title = "Restriction and protection of information in transmission"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-STO-003 (Minimum TLS)
+[[mapping]]
+rule = "AZ-STO-003"
+framework = "cis_azure"
+control = "3.15"
+title = "Minimum TLS version for storage accounts is 1.2"
+verified = false
+
+[[mapping]]
+rule = "AZ-STO-003"
+framework = "nist_csf"
+control = "PR.DS-02"
+title = "The confidentiality, integrity, and availability of data-in-transit are protected"
+verified = false
+
+[[mapping]]
+rule = "AZ-STO-003"
+framework = "soc2"
+control = "CC6.7"
+title = "Restriction and protection of information in transmission"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-EXP-001 (SQL open to internet)
+[[mapping]]
+rule = "AZ-EXP-001"
+framework = "cis_azure"
+control = "4.1.2"
+title = "SQL databases do not allow ingress from any IP address"
+verified = false
+
+[[mapping]]
+rule = "AZ-EXP-001"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = false
+
+[[mapping]]
+rule = "AZ-EXP-001"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-EXP-002 (SQL allows Azure services)
+[[mapping]]
+rule = "AZ-EXP-002"
+framework = "cis_azure"
+control = "4.1.2"
+title = "SQL databases do not allow ingress from any IP address"
+verified = false
+
+[[mapping]]
+rule = "AZ-EXP-002"
+framework = "nist_csf"
+control = "PR.IR-01"
+title = "Networks and environments are protected from unauthorized logical access and usage"
+verified = false
+
+[[mapping]]
+rule = "AZ-EXP-002"
+framework = "soc2"
+control = "CC6.6"
+title = "Logical access security measures against threats from outside system boundaries"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-LOG-001 (Activity Log export)
+[[mapping]]
+rule = "AZ-LOG-001"
+framework = "cis_azure"
+control = "5.1.1"
+title = "A diagnostic setting exists for subscription activity logs"
+verified = false
+
+[[mapping]]
+rule = "AZ-LOG-001"
+framework = "nist_csf"
+control = "PR.PS-04"
+title = "Log records are generated and made available for continuous monitoring"
+verified = false
+
+[[mapping]]
+rule = "AZ-LOG-001"
+framework = "soc2"
+control = "CC7.2"
+title = "System components are monitored for anomalies indicative of malicious acts"
+verified = false
+
+
+# ------------------------------------------------------------------ AZ-SEC-001 (Defender plans)
+[[mapping]]
+rule = "AZ-SEC-001"
+framework = "cis_azure"
+control = "2.1"
+title = "Microsoft Defender for Cloud plans are enabled"
+verified = false
+
+[[mapping]]
+rule = "AZ-SEC-001"
+framework = "nist_csf"
+control = "DE.CM-09"
+title = "Computing hardware and software, runtime environments, and their data are monitored to find potentially adverse events"
+verified = false
+
+[[mapping]]
+rule = "AZ-SEC-001"
+framework = "soc2"
+control = "CC7.2"
+title = "System components are monitored for anomalies indicative of malicious acts"
+verified = false

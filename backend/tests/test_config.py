@@ -4,6 +4,15 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def _no_settings_from_environment(monkeypatch):
+    """The test container receives .env as environment variables (CI changes some of
+    them). Remove every variable that maps to a setting, so these tests see the
+    defaults; tests that need one set it themselves."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 def make_settings(**overrides) -> Settings:
     # _env_file=None: ignore any local .env so tests are deterministic.
     return Settings(_env_file=None, **overrides)
@@ -56,12 +65,62 @@ def test_production_rejects_debug_logging():
         )
 
 
+STRONG_KEY = "k" * 16 + "a-long-random-production-key"  # gitleaks:allow  (test-only)
+
+
 def test_production_accepts_strong_configuration():
     settings = make_settings(
-        app_env="production", postgres_password="a-long-random-production-secret"
+        app_env="production",
+        postgres_password="a-long-random-production-secret",
+        app_secret_key=STRONG_KEY,
+        postgres_owner_user="cloudsecura_owner",
+        postgres_owner_password="another-long-random-secret",
     )
 
     assert settings.is_production
+    assert settings.secret_key == STRONG_KEY
+    assert settings.owner_database_url.username == "cloudsecura_owner"
+    assert settings.database_url.username == "cloudscan"
+
+
+@pytest.mark.parametrize("owner", ["", "cloudscan"])
+def test_production_refuses_connecting_as_the_table_owner(owner):
+    with pytest.raises(ValidationError, match="POSTGRES_OWNER_USER"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            app_secret_key=STRONG_KEY,
+            postgres_owner_user=owner,
+        )
+
+
+def test_development_uses_one_login_for_everything():
+    settings = make_settings(postgres_password="dev")
+    assert settings.owner_database_url == settings.database_url
+
+
+@pytest.mark.parametrize("key", ["", "too-short", "change-me" + "x" * 40])
+def test_production_requires_a_real_secret_key(key):
+    with pytest.raises(ValidationError, match="APP_SECRET_KEY"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            app_secret_key=key,
+        )
+
+
+def test_production_requires_secure_cookies():
+    with pytest.raises(ValidationError, match="SESSION_COOKIE_SECURE"):
+        make_settings(
+            app_env="production",
+            postgres_password="a-long-random-production-secret",
+            app_secret_key=STRONG_KEY,
+            session_cookie_secure=False,
+        )
+
+
+def test_development_falls_back_to_a_marked_development_key():
+    assert "development-only" in make_settings(app_env="development").secret_key
 
 
 def test_rejects_unknown_environment():

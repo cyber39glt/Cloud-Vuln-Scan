@@ -1,0 +1,20 @@
+{
+  "Name": "SubtleTech Security Assessment (read-only)",
+  "IsCustom": true,
+  "Description": "Read-only security assessment: reads the configuration the checks need. No data access, no changes.",
+  "Actions": [
+    "Microsoft.Insights/diagnosticSettings/read",
+    "Microsoft.Network/networkSecurityGroups/read",
+    "Microsoft.Resources/subscriptions/read",
+    "Microsoft.Security/pricings/read",
+    "Microsoft.Sql/servers/firewallRules/read",
+    "Microsoft.Sql/servers/read",
+    "Microsoft.Storage/storageAccounts/read"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/<subscription-id>"
+  ]
+}
