@@ -139,7 +139,7 @@ services:
       start_period: 15s
 
   caddy:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.6-alpine
     ports: # change only for testing (HTTP_PORT/HTTPS_PORT in .env)
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
