@@ -30,17 +30,19 @@ A contribution that weakens either layer will not be accepted.
 
 ## Reporting a vulnerability
 
-The repository is currently **private**. Report suspected vulnerabilities directly
-to the maintainers rather than in an issue or pull request. When the project
-becomes public, this section will name a private reporting channel (GitHub private
-vulnerability reporting).
+**Do not open a public issue.** Use GitHub's private vulnerability reporting:
+repository → **Security** → **Report a vulnerability**
+(https://github.com/cyber39glt/Cloud-Vuln-Scan/security/advisories/new). Only the
+maintainers see the report. We aim to acknowledge reports within 5 working days and
+will agree a disclosure date with you once a fix is available.
 
 Please include the affected component, steps to reproduce, and the impact. Do not
 include real client data or credentials in a report.
 
 ## Supported versions
 
-The project is pre-release. Only the latest commit on the default branch is supported.
+The project is pre-release (0.x). Only the latest release and the default branch
+receive security fixes.
 
 ## Security practices in this repository
 

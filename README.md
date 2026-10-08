@@ -1,23 +1,51 @@
 # CloudSecura
 
-A **read-only cloud security assessment platform** for security consultancies.
-It connects to a client's **AWS** or **Microsoft Azure** environment with read-only
-permissions, runs repeatable security checks, collects evidence, and produces
-reviewed findings mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**, with
-dashboard, PDF, CSV and JSON outputs.
+**Read-only cloud security assessments for AWS and Microsoft Azure.**
 
-> **Status: early development (milestone M14, deployment-ready; hosting provider to be chosen).**
-> Consultants log in to a web dashboard (password + authenticator app), register client
-> AWS accounts and Azure subscriptions, run read-only scans with live progress (19
-> rules), and read reports with evidence and CIS / NIST CSF 2.0 / SOC 2 references,
-> downloadable as a client-ready PDF report, CSV or JSON. Consultants review each finding
-> (confirm, false positive, accepted risk, severity change with justification) and
-> finalize the assessment, which freezes the reviewed report. Admins manage users,
-> client assignments and the audit log.
-> See [the roadmap](docs/architecture.md#roadmap).
+[![CI](https://github.com/cyber39glt/Cloud-Vuln-Scan/actions/workflows/ci.yml/badge.svg)](https://github.com/cyber39glt/Cloud-Vuln-Scan/actions/workflows/ci.yml)
+[![Licence: Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 
-> **Security boundary.** This is a defensive assessment tool. It never modifies,
-> deletes, deploys to or exploits client environments. See [SECURITY.md](SECURITY.md).
+CloudSecura is a platform for security consultancies. It connects to a client's AWS
+account or Azure subscription with **read-only** permissions, runs repeatable security
+checks, backs every finding with evidence, lets consultants review the results, and
+produces a client-ready report mapped to **CIS**, **NIST CSF 2.0** and **SOC 2**: as a
+dashboard, PDF, CSV and JSON, all from one dataset.
+
+![Dashboard (sample data)](docs/images/dashboard-overview.png)
+
+## Features
+
+- **Strictly read-only, enforced twice:** clients grant only the read permissions the
+  checks use (generated from the code), and the platform blocks every non-read call
+  before it is sent.
+- **AWS and Azure:** AWS through a role with an ExternalId; Azure through a
+  multi-tenant app with a custom read-only role. No agents, nothing installed.
+- **19 checks** across identity, storage, network exposure, databases, logging and
+  Microsoft Defender ([list](docs/rules.md#enabled-rules)), each recording pass, fail
+  or "not evaluated" with the reason.
+- **Evidence and framework mapping** for every finding.
+- **Consultant review:** confirm, false positive, accepted risk or adjusted severity,
+  each with a reason and full history; **finalization** freezes a signed report.
+- **Reports:** PDF, CSV (formula-injection safe) and JSON with a published schema.
+- **Secure by default:** mandatory authenticator-app MFA, invitation-only accounts,
+  per-client access, append-only audit log, strict Content-Security-Policy, tamper
+  evidence on stored results, hardened production deployment with automatic HTTPS.
+
+## What it never does
+
+It never modifies, creates or deletes anything in a client environment, never deploys
+or installs anything there, never exploits vulnerabilities or performs intrusive
+testing, and never reads business data or secret values. See [SECURITY.md](SECURITY.md).
+**Use it only on environments you are authorized to assess.**
+
+## Project status
+
+**Version 0.1.0, pre-release** ([changelog](CHANGELOG.md)). All features above are
+implemented and covered by automated tests. The AWS and Azure connectors have so far
+been tested against **simulated** cloud APIs only; the first test against a real
+sandbox account is described in [docs/aws-connection.md](docs/aws-connection.md) and
+[docs/azure-connection.md](docs/azure-connection.md). Known limitations and open risks:
+[docs/threat-model.md](docs/threat-model.md#residual-risks-accepted-or-deferred).
 
 ---
 
@@ -169,7 +197,7 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 ├── backend/                 Python API (FastAPI)
 │   ├── app/
 │   │   ├── main.py          Application entry point
-│   │   ├── api/             HTTP routes (auth, admin, clients, assessments, overview)
+│   │   ├── api/             HTTP routes (auth, onboarding, admin, clients, assessments, reviews)
 │   │   ├── auth/            Passwords, MFA, sessions, audit log
 │   │   ├── worker.py        Background scan worker
 │   │   ├── web.py           Serves the built dashboard
@@ -179,7 +207,8 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 │   │   ├── frameworks/      CIS / NIST CSF / SOC 2 mappings
 │   │   ├── providers/aws/   AWS connector: read-only guard, AssumeRole, collectors
 │   │   ├── providers/azure/ Azure connector: pipeline guard, validation, collectors
-│   │   ├── storage/         Database models and client-scoped data access
+│   │   ├── storage/         Database models, client-scoped data access, database roles
+│   │   ├── policies.py      Generates the least-privilege client permissions
 │   │   └── reporting/       Report dataset + PDF (templates/), JSON and CSV exports
 │   ├── schemas/             Published JSON Schema of the JSON export
 │   ├── migrations/          Alembic database migrations
@@ -194,12 +223,14 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 ├── docs/
 │   ├── architecture.md      Architecture overview and roadmap
 │   └── decisions/           Architecture Decision Records (ADRs)
-├── infra/aws/               CloudFormation: client read-only role; sandbox test fixtures
-├── infra/azure/             ARM template: sandbox test fixtures
-├── scripts/dev.ps1          Windows development commands
+├── infra/aws/               CloudFormation: client read-only role (generated permissions); sandbox fixtures
+├── infra/azure/             Custom read-only role (generated); sandbox fixtures
+├── deploy/                  Production: compose.prod.yml, Caddyfile, init-env.sh
+├── scripts/                 dev.ps1 (Windows development), CI smoke tests
 ├── docker-compose.yml       Local environment: PostgreSQL + API + worker + dashboard
 ├── .env.example             Documented configuration template
-└── .github/workflows/ci.yml Continuous integration
+├── LICENSE, NOTICE          Apache-2.0 licence and third-party notices
+└── .github/                 CI, Dependabot, issue and pull request templates
 ```
 
 ## Documentation
@@ -214,9 +245,19 @@ In production, secrets are supplied by the hosting platform's secret manager, ne
 - [Using the dashboard](docs/dashboard.md)
 - [User accounts and logging in](docs/users.md)
 - [Using the API](docs/api.md)
+- [Deployment guide](docs/deployment.md) and [hosting options](docs/hosting.md)
+- [Threat model](docs/threat-model.md)
+- [Public release checklist](docs/release-checklist.md)
 - [Security policy](SECURITY.md)
 
-## License
+## Contributing
 
-To be decided before public release (see [ADR 0012](docs/decisions/0012-private-now-open-source-later.md)).
-Until then, all rights are reserved.
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately
+([SECURITY.md](SECURITY.md)), never in a public issue.
+
+## Licence
+
+[Apache License 2.0](LICENSE). Third-party notices: [NOTICE](NOTICE).
+
+Created by [@cyber39glt](https://x.com/cyber39glt).

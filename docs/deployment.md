@@ -46,7 +46,9 @@ Turn on automatic security updates: `sudo apt install unattended-upgrades`.
 
 ## 4. Get the code
 
-The repository is private, so give the server **read-only** access with a deploy key:
+**Public repository:** `git clone https://github.com/cyber39glt/Cloud-Vuln-Scan.git cloudsecura && cd cloudsecura`.
+
+**Private repository** (or a private fork): give the server **read-only** access with a deploy key:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/cloudsecura_deploy -N ""
