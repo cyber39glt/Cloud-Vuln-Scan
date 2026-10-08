@@ -93,7 +93,8 @@ describe("login", () => {
     await screen.findByText("Set up your authenticator");
     await screen.findByText("JBSW Y3DP EHPK 3PXP");
     fill("6-digit code", "123456");
-    fireEvent.click(screen.getByRole("button", { name: "Turn on MFA" }));
+    // The button reads "Checking…" until the QR code has been drawn.
+    fireEvent.click(await screen.findByRole("button", { name: "Turn on MFA" }));
     await screen.findByText("aaaa-bbbb-cccc");
     const proceed = screen.getByRole("button", { name: "Continue" });
     expect(proceed).toHaveProperty("disabled", true);
