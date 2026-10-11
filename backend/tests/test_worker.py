@@ -10,12 +10,13 @@ from datetime import UTC, datetime, timedelta
 
 import boto3
 import pytest
-from botocore.exceptions import ClientError
+from azure.core.exceptions import ClientAuthenticationError
+from botocore.exceptions import ClientError, NoCredentialsError
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
-from app.domain.enums import ScanStage
+from app.domain.enums import Provider, ScanStage
 from app.providers.common import ReadOnlyViolation
 from app.rules.engine import RuleEngine
 from app.sample_data import sample_aws_inventory, sample_azure_inventory
@@ -23,7 +24,7 @@ from app.scanning import WrongAccountError
 from app.storage import jobs
 from app.storage import repository as repo
 from app.storage.models import AuditEvent, Client, FindingRecord, JobStatus, ScanJob, ScanRun
-from app.worker import Scanners, work_once
+from app.worker import Scanners, _describe_failure, work_once
 
 pytestmark = pytest.mark.integration
 
@@ -136,6 +137,15 @@ def test_progress_is_visible_while_the_scan_runs(db, factory, worker_settings):
 
 
 # ------------------------------------------------------------------ failures
+
+
+def test_cloud_failures_name_the_connection_check_command():
+    """The tip points to the command that exists (the check is not in the dashboard)."""
+    _, message = _describe_failure(Provider.AWS, NoCredentialsError())
+    assert "'aws validate'" in message and "docs/aws-connection.md" in message
+    assert "no AWS identity configured" in message
+    _, message = _describe_failure(Provider.AZURE, ClientAuthenticationError("denied"))
+    assert "'azure validate'" in message and "docs/azure-connection.md" in message
 
 
 @pytest.mark.parametrize(
