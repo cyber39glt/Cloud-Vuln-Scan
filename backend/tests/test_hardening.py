@@ -1,11 +1,12 @@
 """Regression tests for the M13 security review findings (ADR 0025)."""
 
+import asyncio
 import csv
 import io
 import json
 
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, event, select, text
 
 from app.api.security import HSTS
 from app.auth import onboarding, service
@@ -262,3 +263,41 @@ def test_the_signature_key_comes_from_app_secret_key(monkeypatch):
     mac_a = repo.integrity_mac("scan_run", "x")
     monkeypatch.setattr(repo, "get_settings", lambda: second)
     assert repo.integrity_mac("scan_run", "x") != mac_a
+
+
+# ------------------------------------------------------------------ transaction timing
+
+
+def test_database_work_is_committed_before_the_response_is_sent(http):
+    """The response must only report success once the data is saved: a client acting
+    on it at once (the dashboard, the CI smoke test) must see its own change."""
+    from app.api import deps
+    from app.main import app
+
+    order: list[str] = []
+    factory = deps.get_sessionmaker()  # the test's session factory (http fixture)
+
+    def committed(_session):
+        order.append("commit")
+
+    event.listen(factory, "after_commit", committed)
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        if message["type"] == "http.response.start":
+            order.append("response")
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+        "method": "GET", "scheme": "http", "path": "/api/v1/setup",
+        "raw_path": b"/api/v1/setup", "root_path": "", "query_string": b"",
+        "headers": [(b"host", b"localhost")], "client": ("127.0.0.1", 1),
+        "server": ("localhost", 80),
+    }  # fmt: skip
+    try:
+        asyncio.run(app(scope, receive, send))
+    finally:
+        event.remove(factory, "after_commit", committed)
+    assert order[:2] == ["commit", "response"], order

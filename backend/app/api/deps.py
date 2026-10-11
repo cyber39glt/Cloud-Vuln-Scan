@@ -34,7 +34,10 @@ def get_db() -> Iterator[Session]:
         yield session
 
 
-DbSession = Annotated[Session, Depends(get_db)]
+# scope="function": commit BEFORE the response is sent. With FastAPI's default the
+# commit runs after the response, so a client could act on a "success" that was never
+# saved, or not yet see its own change in the next request.
+DbSession = Annotated[Session, Depends(get_db, scope="function")]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 
 

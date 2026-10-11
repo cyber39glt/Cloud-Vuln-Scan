@@ -37,6 +37,8 @@ The first release, built in milestones M0 to M15 (details in
   login, hardened containers, nightly backups, tested restore. Only the scan worker
   holds cloud credentials; on update it finishes a running scan first (up to 30
   minutes).
+- API responses are sent only after the database transaction is committed, so a
+  reported success is always saved and visible to the next request.
 - CI: lint, tests, migration check, production stack smoke test, dependency audit,
   full-history secret scan; Dependabot.
 
