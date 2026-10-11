@@ -77,6 +77,11 @@ then writes `deploy/.env` with fresh random secrets (readable only by you).
 **Back up `deploy/.env` in your password manager**: `APP_SECRET_KEY` cannot be
 changed later without invalidating every MFA enrolment and every stored signature.
 
+Keep every setting in `deploy/.env` only. Do not `export` them in the server's shell
+(for example `export AWS_ACCESS_KEY_ID=...`): Docker Compose gives shell variables
+priority over `.env`, so a forgotten shell variable would silently replace the
+value in the file.
+
 ## 6. Start it
 
 ```bash
@@ -112,12 +117,34 @@ Without it, scans fail with a clear message. Add the values to `deploy/.env`, th
   Keyless sign-in from an Azure server (managed identity) is planned once the host is
   chosen ([hosting.md](hosting.md)).
 
-## 9. Updating
+To check a client's connection, run the check in the **worker** container (the API
+container has no internet access, on purpose):
 
 ```bash
-cd ~/cloudsecura && git pull
-cd deploy && docker compose -f compose.prod.yml up -d --build
+docker compose -f compose.prod.yml exec worker python -m app.cli aws validate --client "Client name" --account-id 123456789012
+docker compose -f compose.prod.yml exec worker python -m app.cli azure validate --client "Client name" --subscription-id <subscription-id>
 ```
+
+## 9. Updating
+
+1. **Wait until no scan is running** (no assessment shows "Scanning…" in the
+   dashboard). On update the worker first finishes the scan in progress, for up to
+   30 minutes; a longer scan is stopped, marked failed and must be run again.
+2. **Take a backup** (the automatic one at start-up is not guaranteed to run before
+   the migrations):
+   ```bash
+   cd ~/cloudsecura/deploy
+   f=cloudsecura-before-update-$(date -u +%Y%m%dT%H%M%SZ).dump
+   docker compose -f compose.prod.yml exec backup pg_dump -Fc -h db -f /backups/$f
+   docker compose -f compose.prod.yml exec backup chmod 600 /backups/$f
+   ```
+   (The second command makes the file readable by its owner only, like the
+   automatic backups: dumps contain client findings.)
+3. **Update:**
+   ```bash
+   cd ~/cloudsecura && git pull
+   cd deploy && docker compose -f compose.prod.yml up -d --build
+   ```
 
 Migrations run automatically; the database is kept. Read the release notes (commit
 messages) before updating.

@@ -30,6 +30,8 @@ curl -sk https://localhost:8443/ | grep -q "<title>CloudSecura</title>" || fail 
 api=$(compose ps -q api)
 docker exec "$api" sh -c 'touch /app/x' 2>/dev/null && fail "API file system writable"
 docker exec "$api" sh -c 'env | grep -q POSTGRES_OWNER_PASSWORD' && fail "owner password in API"
+docker exec "$api" sh -c 'env | grep -qE "^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AZURE_CLIENT_SECRET)="' \
+  && fail "cloud secrets in API"
 docker exec "$api" python -c "import socket; socket.create_connection(('1.1.1.1', 443), timeout=3)" 2>/dev/null \
   && fail "API container can reach the internet"
 

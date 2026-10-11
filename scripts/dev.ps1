@@ -107,6 +107,7 @@ Usage: .\scripts\dev.ps1 <command> [extra args]
               azure validate --client "Acme Ltd" --subscription-id <guid>
               azure scan --client "Acme Ltd" --subscription-id <guid> [--regions uksouth]
   users     User accounts (run on the server), e.g.:
+              users setup-code                                  (first admin, via the setup page)
               users create --admin --email you@example.com --name "Your Name"
               users list
               users reset-mfa --email someone@example.com       (lost phone)
@@ -161,7 +162,7 @@ try {
             Invoke-Compose @("up", "--build", "--detach", "--wait")
             Invoke-Migrations
             Write-Host "`nDashboard: http://localhost:5173   (API: http://localhost:8000)" -ForegroundColor Green
-            Write-Host "First time? Create your admin account:  .\scripts\dev.ps1 users create --admin --email you@example.com --name `"Your Name`"" -ForegroundColor Green
+            Write-Host "First time? Run '.\scripts\dev.ps1 users setup-code', then open the dashboard and click 'Set up this installation'." -ForegroundColor Green
             Write-Host "Scan worker running: '.\scripts\dev.ps1 logs worker' shows its activity." -ForegroundColor Green
         }
         "down"    { Write-Step "Stopping containers"; Invoke-Compose @("down") }

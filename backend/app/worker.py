@@ -108,7 +108,10 @@ def _describe_failure(provider: Provider | None, error: Exception) -> tuple[str,
         return type(error).__name__, "The scan could not be prepared."
     describe = describe_aws_error if provider == Provider.AWS else describe_azure_error
     problem = describe(error)
-    tip = "Run the connection validation for this account to diagnose."
+    # The connection check is a command on the server (it is not in the dashboard).
+    command = "aws validate" if provider == Provider.AWS else "azure validate"
+    guide = "aws-connection.md" if provider == Provider.AWS else "azure-connection.md"
+    tip = f"To diagnose, run the connection check '{command}' on the server (docs/{guide})."
     return problem.code, f"{problem.message} {problem.hint} {tip}".replace("  ", " ").strip()
 
 

@@ -106,11 +106,9 @@ services:
       - --no-server-header
       - --proxy-headers
       - --forwarded-allow-ips=${EDGE_NET:-172.31.250}.2
-    environment:
-      <<: *app-env
-      # Platform cloud identity (development-style keys; on AWS/Azure hosts prefer
-      # the host's managed identity, see docs/deployment.md).
-      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+    # No cloud secrets here: the API never calls a cloud (it has no internet access);
+    # only the worker does.
+    environment: *app-env
     networks:
       edge: { ipv4_address: "${EDGE_NET:-172.31.250}.3" } # caddy is .2
       data: {}
@@ -123,12 +121,18 @@ services:
     command: ["python", "-m", "app.worker"]
     environment:
       <<: *app-env
+      # Platform cloud identity (keys; on AWS hosts prefer the server's IAM role and
+      # leave them empty, see docs/deployment.md).
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
     networks: [data, egress]
     mem_limit: 1g
-    stop_grace_period: 2m
+    # On stop or update, the worker finishes the scan in progress first. Docker waits
+    # up to this long before killing it (an interrupted scan is marked failed and
+    # must be run again). So `docker compose up -d` can take that long while a scan
+    # runs: update between scans (docs/deployment.md, "Updating").
+    stop_grace_period: 30m
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
