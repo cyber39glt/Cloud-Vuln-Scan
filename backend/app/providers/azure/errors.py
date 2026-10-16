@@ -53,7 +53,7 @@ _SIGN_IN_ERRORS = {
 _ARM_ERRORS = {
     "AuthorizationFailed": (
         "Azure denied the request.",
-        "The platform app lacks the Reader / Security Reader role on this subscription.",
+        "The platform app lacks its read-only role (the custom role, or Reader + Security Reader) on this subscription.",
     ),
     "SubscriptionNotFound": (
         "The subscription was not found or is not visible to the platform.",

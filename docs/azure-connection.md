@@ -194,4 +194,4 @@ Nothing else: no outbound rules, no keys, no blob or database contents.
 | The platform app is not present in the client's tenant | Admin consent not given (or wrong tenant ID) |
 | The platform app's client secret is wrong / has expired | Copy the secret **Value** (not its ID); create a new one if expired |
 | Belongs to tenant …, not the one given | Tenant and subscription IDs do not belong together |
-| Azure denied the request … Reader / Security Reader | Role assignments missing, on another scope, or not yet applied (wait a few minutes) |
+| Azure denied the request … lacks its read-only role | Role assignments missing, on another scope, or not yet applied (wait a few minutes) |

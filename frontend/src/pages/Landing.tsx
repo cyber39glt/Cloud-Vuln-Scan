@@ -26,7 +26,7 @@ const FEATURES = [
   {
     icon: CloudIcon,
     title: "AWS and Azure",
-    text: "AWS through a role with an ExternalId; Azure through a multi-tenant app with Reader roles. No agents, nothing installed.",
+    text: "AWS through a role with an ExternalId; Azure through a multi-tenant app with a custom 7-permission read role. No agents, nothing installed.",
   },
   {
     icon: ListCheckIcon,

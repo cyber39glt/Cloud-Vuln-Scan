@@ -36,8 +36,8 @@ the choice is remembered in your browser.
 ## How a scan works
 
 1. Register the cloud account on the client page. **Nothing is contacted.**
-2. Send the client the setup steps. They grant **read-only** access (an AWS role or
-   Azure Reader roles); see [aws-connection.md](aws-connection.md) and
+2. Send the client the setup steps. They grant **read-only** access (an AWS role, or a
+   custom read-only Azure role); see [aws-connection.md](aws-connection.md) and
    [azure-connection.md](azure-connection.md).
 3. Create an assessment, then **Run read-only scan**. The scan runs in the background
    worker; you can leave the page.
